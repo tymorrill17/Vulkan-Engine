@@ -1,0 +1,67 @@
+[
+{
+  "directory": "/home/tyler/Codes/vulkan-guide/build/third_party",
+  "command": "/usr/bin/g++  -I/home/tyler/Codes/vulkan-guide/third_party/vkbootstrap -g -o CMakeFiles/vkbootstrap.dir/vkbootstrap/VkBootstrap.cpp.o -c /home/tyler/Codes/vulkan-guide/third_party/vkbootstrap/VkBootstrap.cpp",
+  "file": "/home/tyler/Codes/vulkan-guide/third_party/vkbootstrap/VkBootstrap.cpp"
+},
+{
+  "directory": "/home/tyler/Codes/vulkan-guide/build/third_party",
+  "command": "/usr/bin/g++  -I/home/tyler/Codes/vulkan-guide/third_party/tinyobjloader -g -o CMakeFiles/tinyobjloader.dir/tinyobjloader/tiny_obj_loader.cc.o -c /home/tyler/Codes/vulkan-guide/third_party/tinyobjloader/tiny_obj_loader.cc",
+  "file": "/home/tyler/Codes/vulkan-guide/third_party/tinyobjloader/tiny_obj_loader.cc"
+},
+{
+  "directory": "/home/tyler/Codes/vulkan-guide/build/third_party",
+  "command": "/usr/bin/g++  -I/home/tyler/Codes/vulkan-guide/third_party/imgui -I/home/tyler/Codes/vulkan-guide/third_party/SDL_PATH/include/SDL2 -I/include/SDL2 -g -o CMakeFiles/imgui.dir/imgui/imgui.cpp.o -c /home/tyler/Codes/vulkan-guide/third_party/imgui/imgui.cpp",
+  "file": "/home/tyler/Codes/vulkan-guide/third_party/imgui/imgui.cpp"
+},
+{
+  "directory": "/home/tyler/Codes/vulkan-guide/build/third_party",
+  "command": "/usr/bin/g++  -I/home/tyler/Codes/vulkan-guide/third_party/imgui -I/home/tyler/Codes/vulkan-guide/third_party/SDL_PATH/include/SDL2 -I/include/SDL2 -g -o CMakeFiles/imgui.dir/imgui/imgui_demo.cpp.o -c /home/tyler/Codes/vulkan-guide/third_party/imgui/imgui_demo.cpp",
+  "file": "/home/tyler/Codes/vulkan-guide/third_party/imgui/imgui_demo.cpp"
+},
+{
+  "directory": "/home/tyler/Codes/vulkan-guide/build/third_party",
+  "command": "/usr/bin/g++  -I/home/tyler/Codes/vulkan-guide/third_party/imgui -I/home/tyler/Codes/vulkan-guide/third_party/SDL_PATH/include/SDL2 -I/include/SDL2 -g -o CMakeFiles/imgui.dir/imgui/imgui_draw.cpp.o -c /home/tyler/Codes/vulkan-guide/third_party/imgui/imgui_draw.cpp",
+  "file": "/home/tyler/Codes/vulkan-guide/third_party/imgui/imgui_draw.cpp"
+},
+{
+  "directory": "/home/tyler/Codes/vulkan-guide/build/third_party",
+  "command": "/usr/bin/g++  -I/home/tyler/Codes/vulkan-guide/third_party/imgui -I/home/tyler/Codes/vulkan-guide/third_party/SDL_PATH/include/SDL2 -I/include/SDL2 -g -o CMakeFiles/imgui.dir/imgui/imgui_widgets.cpp.o -c /home/tyler/Codes/vulkan-guide/third_party/imgui/imgui_widgets.cpp",
+  "file": "/home/tyler/Codes/vulkan-guide/third_party/imgui/imgui_widgets.cpp"
+},
+{
+  "directory": "/home/tyler/Codes/vulkan-guide/build/third_party",
+  "command": "/usr/bin/g++  -I/home/tyler/Codes/vulkan-guide/third_party/imgui -I/home/tyler/Codes/vulkan-guide/third_party/SDL_PATH/include/SDL2 -I/include/SDL2 -g -o CMakeFiles/imgui.dir/imgui/imgui_impl_vulkan.cpp.o -c /home/tyler/Codes/vulkan-guide/third_party/imgui/imgui_impl_vulkan.cpp",
+  "file": "/home/tyler/Codes/vulkan-guide/third_party/imgui/imgui_impl_vulkan.cpp"
+},
+{
+  "directory": "/home/tyler/Codes/vulkan-guide/build/third_party",
+  "command": "/usr/bin/g++  -I/home/tyler/Codes/vulkan-guide/third_party/imgui -I/home/tyler/Codes/vulkan-guide/third_party/SDL_PATH/include/SDL2 -I/include/SDL2 -g -o CMakeFiles/imgui.dir/imgui/imgui_impl_sdl.cpp.o -c /home/tyler/Codes/vulkan-guide/third_party/imgui/imgui_impl_sdl.cpp",
+  "file": "/home/tyler/Codes/vulkan-guide/third_party/imgui/imgui_impl_sdl.cpp"
+},
+{
+  "directory": "/home/tyler/Codes/vulkan-guide/build/src",
+  "command": "/usr/bin/g++  -I/home/tyler/Codes/vulkan-guide/src -I/home/tyler/Codes/vulkan-guide/third_party/vkbootstrap -I/home/tyler/Codes/vulkan-guide/third_party/vma -I/home/tyler/Codes/vulkan-guide/third_party/glm -I/home/tyler/Codes/vulkan-guide/third_party/tinyobjloader -I/home/tyler/Codes/vulkan-guide/third_party/imgui -I/home/tyler/Codes/vulkan-guide/third_party/SDL_PATH/include/SDL2 -I/include/SDL2 -I/home/tyler/Codes/vulkan-guide/third_party/stb_image -g -o CMakeFiles/vulkan_guide.dir/main.cpp.o -c /home/tyler/Codes/vulkan-guide/src/main.cpp",
+  "file": "/home/tyler/Codes/vulkan-guide/src/main.cpp"
+},
+{
+  "directory": "/home/tyler/Codes/vulkan-guide/build/src",
+  "command": "/usr/bin/g++  -I/home/tyler/Codes/vulkan-guide/src -I/home/tyler/Codes/vulkan-guide/third_party/vkbootstrap -I/home/tyler/Codes/vulkan-guide/third_party/vma -I/home/tyler/Codes/vulkan-guide/third_party/glm -I/home/tyler/Codes/vulkan-guide/third_party/tinyobjloader -I/home/tyler/Codes/vulkan-guide/third_party/imgui -I/home/tyler/Codes/vulkan-guide/third_party/SDL_PATH/include/SDL2 -I/include/SDL2 -I/home/tyler/Codes/vulkan-guide/third_party/stb_image -g -o CMakeFiles/vulkan_guide.dir/vk_engine.cpp.o -c /home/tyler/Codes/vulkan-guide/src/vk_engine.cpp",
+  "file": "/home/tyler/Codes/vulkan-guide/src/vk_engine.cpp"
+},
+{
+  "directory": "/home/tyler/Codes/vulkan-guide/build/src",
+  "command": "/usr/bin/g++  -I/home/tyler/Codes/vulkan-guide/src -I/home/tyler/Codes/vulkan-guide/third_party/vkbootstrap -I/home/tyler/Codes/vulkan-guide/third_party/vma -I/home/tyler/Codes/vulkan-guide/third_party/glm -I/home/tyler/Codes/vulkan-guide/third_party/tinyobjloader -I/home/tyler/Codes/vulkan-guide/third_party/imgui -I/home/tyler/Codes/vulkan-guide/third_party/SDL_PATH/include/SDL2 -I/include/SDL2 -I/home/tyler/Codes/vulkan-guide/third_party/stb_image -g -o CMakeFiles/vulkan_guide.dir/vk_initializers.cpp.o -c /home/tyler/Codes/vulkan-guide/src/vk_initializers.cpp",
+  "file": "/home/tyler/Codes/vulkan-guide/src/vk_initializers.cpp"
+},
+{
+  "directory": "/home/tyler/Codes/vulkan-guide/build/src",
+  "command": "/usr/bin/g++  -I/home/tyler/Codes/vulkan-guide/src -I/home/tyler/Codes/vulkan-guide/third_party/vkbootstrap -I/home/tyler/Codes/vulkan-guide/third_party/vma -I/home/tyler/Codes/vulkan-guide/third_party/glm -I/home/tyler/Codes/vulkan-guide/third_party/tinyobjloader -I/home/tyler/Codes/vulkan-guide/third_party/imgui -I/home/tyler/Codes/vulkan-guide/third_party/SDL_PATH/include/SDL2 -I/include/SDL2 -I/home/tyler/Codes/vulkan-guide/third_party/stb_image -g -o CMakeFiles/vulkan_guide.dir/vk_pipeline.cpp.o -c /home/tyler/Codes/vulkan-guide/src/vk_pipeline.cpp",
+  "file": "/home/tyler/Codes/vulkan-guide/src/vk_pipeline.cpp"
+},
+{
+  "directory": "/home/tyler/Codes/vulkan-guide/build/src",
+  "command": "/usr/bin/g++  -I/home/tyler/Codes/vulkan-guide/src -I/home/tyler/Codes/vulkan-guide/third_party/vkbootstrap -I/home/tyler/Codes/vulkan-guide/third_party/vma -I/home/tyler/Codes/vulkan-guide/third_party/glm -I/home/tyler/Codes/vulkan-guide/third_party/tinyobjloader -I/home/tyler/Codes/vulkan-guide/third_party/imgui -I/home/tyler/Codes/vulkan-guide/third_party/SDL_PATH/include/SDL2 -I/include/SDL2 -I/home/tyler/Codes/vulkan-guide/third_party/stb_image -g -o CMakeFiles/vulkan_guide.dir/vk_mesh.cpp.o -c /home/tyler/Codes/vulkan-guide/src/vk_mesh.cpp",
+  "file": "/home/tyler/Codes/vulkan-guide/src/vk_mesh.cpp"
+}
+]
