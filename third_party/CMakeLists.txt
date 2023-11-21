@@ -1,4 +1,5 @@
 find_package(Vulkan REQUIRED)
+find_package(SDL2 REQUIRED)
 
 add_library(vkbootstrap STATIC)
 add_library(glm INTERFACE)
@@ -7,6 +8,8 @@ add_library(vma INTERFACE)
 add_library(stb_image INTERFACE)
 
 add_library(tinyobjloader STATIC)
+
+add_library(sdl2 INTERFACE)
 
 target_sources(vkbootstrap PRIVATE 
     vkbootstrap/VkBootstrap.h
@@ -27,9 +30,7 @@ target_sources(tinyobjloader PRIVATE
 
 target_include_directories(tinyobjloader PUBLIC tinyobjloader)
 
-
-add_library(sdl2 INTERFACE)
-find_package(SDL2 REQUIRED)
+# 
 include_directories(sdl2 INTERFACE ${SDL2_INCLUDE_DIRS})
 target_link_libraries(sdl2 INTERFACE ${SDL2_LIBRARIES})
 
