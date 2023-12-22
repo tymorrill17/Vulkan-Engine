@@ -274,13 +274,13 @@ void VulkanEngine::init_sync() {
 // Initialize rendering pipeline structures
 void VulkanEngine::init_pipelines() {
 	VkShaderModule triangleFragShader;
-	if (!load_shader_module("../shaders/fragment.frag.spv", &triangleFragShader)) {
+	if (!load_shader_module("shaders/fragment.frag.spv", &triangleFragShader)) {
 		std::cout << "Error building the fragment shader module!" << std::endl;
 	} else {
 		std::cout << "Fragment shader module loaded!" << std::endl;
 	}
 	VkShaderModule meshVertShader;
-	if (!load_shader_module("../shaders/tri_mesh.vert.spv", &meshVertShader))
+	if (!load_shader_module("shaders/tri_mesh.vert.spv", &meshVertShader))
 	{
 		std::cout << "Error when building the triangle vertex shader module" << std::endl;
 	}
@@ -360,6 +360,7 @@ bool VulkanEngine::load_shader_module(const char* filepath, VkShaderModule* out_
 	// std::ios::binary -> opens file in binary mode
 	std::ifstream file(filepath, std::ios::ate | std::ios::binary);
 	if (!file.is_open()) {
+		std::cerr << "ERROR: Shader file does not exist!" << std::endl;
 		return false;
 	}
 	// Since cursor is at the end, use it to find the size of the file, then copy the entire shader into a vector of uint32_t
@@ -378,6 +379,7 @@ bool VulkanEngine::load_shader_module(const char* filepath, VkShaderModule* out_
 
 	VkShaderModule shader_module;
 	if (vkCreateShaderModule(device, &createinfo, nullptr, &shader_module) != VK_SUCCESS) {
+		std::cerr << "ERROR: Something went wrong within vkCreateShaderModule()!" << std::endl;
 		return false;
 	}
 	*out_shader_module = shader_module;
@@ -398,10 +400,10 @@ void VulkanEngine::load_meshes() {
 	upload_mesh(triangle_mesh);
 	
 	Mesh monkey_mesh;
-	monkey_mesh.load_from_obj("../assets/monkey_smooth.obj"); // Load monkey
+	monkey_mesh.load_from_obj("assets/monkey_smooth.obj"); // Load monkey
 	upload_mesh(monkey_mesh);
 
-	std::string obj_dir = "../../../Test/OBJ_Files/"; // Directory for downloaded OBJ files
+	std::string obj_dir = "../../Test/OBJ_Files/"; // Directory for downloaded OBJ files
 
 	std::string filename = obj_dir + "Koenigsegg.obj";
 	Mesh koenigsegg_mesh;
