@@ -61,6 +61,14 @@ struct FrameData {
 	VkDescriptorSet global_descriptor;
 };
 
+struct GPUSceneData {
+	glm::vec4 fog_color;
+	glm::vec4 fog_distances;
+	glm::vec4 ambient_color;
+	glm::vec4 sunlight_color;
+	glm::vec4 sunlight_direction;
+};
+
 constexpr unsigned int FRAME_OVERLAP = 2;
 
 class VulkanEngine {
@@ -74,6 +82,7 @@ public:
 	VkInstance instance;
 	VkDebugUtilsMessengerEXT debug_messenger;
 	VkPhysicalDevice chosenGPU;
+	VkPhysicalDeviceProperties gpu_properties;
 	VkDevice device;
 	VkSurfaceKHR surface;
 	// Swapchain structures
@@ -107,6 +116,8 @@ public:
 	// Descriptor Sets
 	VkDescriptorSetLayout global_set_layout;
 	VkDescriptorPool descriptor_pool;
+	GPUSceneData scene_parameters;
+	AllocatedBuffer scene_parameter_buffer;
 
 	int selectedShader{0}; // 0 -> red triangle, 1 -> colored triangle
 
@@ -146,6 +157,8 @@ public:
 	bool renderable_sorter(RenderObject const& lhs, RenderObject const& rhs) {
 		return false;
 	}
+
+	size_t pad_uniform_buffer_size(size_t original_size);
 
 private:
 	void init_vulkan();

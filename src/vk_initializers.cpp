@@ -181,3 +181,25 @@ VkRenderPassBeginInfo vkinit::renderpass_begin_info(VkRenderPass renderpass, VkE
 	info.framebuffer = framebuffer;
     return info;
 }
+
+VkDescriptorSetLayoutBinding vkinit::descriptorset_layout_binding(VkDescriptorType type, VkShaderStageFlags stage_flags, uint32_t binding) {
+    VkDescriptorSetLayoutBinding layout_binding={};
+	layout_binding.binding = binding;
+	layout_binding.descriptorCount = 1;
+	layout_binding.descriptorType = type; // What type of binding?
+    layout_binding.pImmutableSamplers = nullptr;
+	layout_binding.stageFlags = stage_flags; // Which stage is the buffer being accesed?
+    return layout_binding;
+}
+
+VkWriteDescriptorSet vkinit::write_descriptorset_buffer(VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorBufferInfo* bufferInfo, uint32_t binding) {
+    VkWriteDescriptorSet write_buf={};
+    write_buf.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write_buf.pNext = nullptr;
+    write_buf.dstBinding = binding; // Writing to binding 0
+    write_buf.dstSet = dstSet; // of the global descriptor
+    write_buf.descriptorCount = 1;
+    write_buf.descriptorType = type;
+    write_buf.pBufferInfo = bufferInfo;
+    return write_buf;
+}
