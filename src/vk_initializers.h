@@ -24,5 +24,7 @@ namespace vkinit {
 	VkRenderPassBeginInfo renderpass_begin_info(VkRenderPass renderpass, VkExtent2D extent, VkFramebuffer framebuffer);
 	VkDescriptorSetLayoutBinding descriptorset_layout_binding(VkDescriptorType type, VkShaderStageFlags flags, uint32_t binding);
 	VkWriteDescriptorSet write_descriptorset_buffer(VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorBufferInfo* bufferInfo, uint32_t binding);
+	VkCommandBufferBeginInfo command_buffer_begin_info(VkCommandBufferUsageFlags flags = 0);
+	VkSubmitInfo submit_info(VkCommandBuffer* cmd);
 }
 

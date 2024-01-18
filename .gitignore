@@ -12,3 +12,6 @@ _deps
 *.spv
 *.a
 bin/
+.cmake/
+CMakeFiles/
+.vscode/

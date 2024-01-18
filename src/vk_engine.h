@@ -59,6 +59,8 @@ struct FrameData {
 	VkCommandBuffer command_buffer;
 	AllocatedBuffer camera_buffer; // Buffer that holds a single GPUCameraData to use when rendering
 	VkDescriptorSet global_descriptor;
+	AllocatedBuffer object_buffer; // Storage buffer
+	VkDescriptorSet object_descriptor;
 };
 
 struct GPUSceneData {
@@ -67,6 +69,16 @@ struct GPUSceneData {
 	glm::vec4 ambient_color;
 	glm::vec4 sunlight_color;
 	glm::vec4 sunlight_direction;
+};
+
+struct GPUObjectData {
+	glm::mat4 modelMatrix;
+};
+
+struct UploadContext {
+	VkFence upload_fence;
+	VkCommandPool command_pool;
+	VkCommandBuffer command_buffer;
 };
 
 constexpr unsigned int FRAME_OVERLAP = 2;
@@ -115,9 +127,13 @@ public:
 	std::unordered_map<std::string,Mesh> meshes;
 	// Descriptor Sets
 	VkDescriptorSetLayout global_set_layout;
+	VkDescriptorSetLayout object_set_layout;
 	VkDescriptorPool descriptor_pool;
 	GPUSceneData scene_parameters;
 	AllocatedBuffer scene_parameter_buffer;
+	// To copy data to GPU memory
+	UploadContext upload_context;
+
 
 	int selectedShader{0}; // 0 -> red triangle, 1 -> colored triangle
 
@@ -157,8 +173,10 @@ public:
 	bool renderable_sorter(RenderObject const& lhs, RenderObject const& rhs) {
 		return false;
 	}
-
+	// Pad the uniform buffer sizes to align them properly with the minimum alignment size
 	size_t pad_uniform_buffer_size(size_t original_size);
+	// immediately execute command
+	void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 
 private:
 	void init_vulkan();

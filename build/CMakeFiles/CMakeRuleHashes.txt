@@ -1,7 +1,0 @@
-# Hashes of file build rules.
-6e27adeffb31bd31921554c75364d39f ../shaders/fragment.frag.spv
-6c465787e0edc45268f1206081aa6a32 ../shaders/fragment_red_tri.frag.spv
-ea581309e5f97dfd8175a999b10de97e ../shaders/tri_mesh.vert.spv
-6a0f963d4edb2b8233f05e08d10b0738 ../shaders/triangle.vert.spv
-66069230fa84f7b7cae0bcc450d066c8 ../shaders/triangle_red_tri.vert.spv
-9c260903457e71ae270f8268dc7cdfab CMakeFiles/Shaders
