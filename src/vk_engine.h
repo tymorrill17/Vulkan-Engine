@@ -3,6 +3,8 @@
 
 #pragma once
 
+#define GLM_ENABLE_EXPERIMENTAL
+
 #include "vk_types.h"
 #include <vk_mesh.h>
 #include <vector>
@@ -10,8 +12,8 @@
 #include <iostream>
 #include <functional>
 #include <deque>
-#include <glm/glm.hpp>
-#include <glm/gtx/transform.hpp>
+#include <glm.hpp>
+#include <gtx/transform.hpp>
 
 struct DeletionQueue {
 	std::deque<std::function<void()>> deletors;

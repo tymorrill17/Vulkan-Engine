@@ -2,8 +2,8 @@
 
 #include <vk_types.h>
 #include <vector>
-#include <glm/vec3.hpp>
-#include <glm/vec2.hpp>
+#include <vec3.hpp>
+#include <vec2.hpp>
 
 struct VertexInputDescription {
     std::vector<VkVertexInputBindingDescription> bindings;
