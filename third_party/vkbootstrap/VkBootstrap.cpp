@@ -50,63 +50,61 @@ bool GenericFeaturesPNextNode::match(GenericFeaturesPNextNode const& requested, 
 class VulkanFunctions {
     private:
     std::mutex init_mutex;
-    struct VulkanLibrary {
-#if defined(__linux__) || defined(__APPLE__)
-        void* library;
-#elif defined(_WIN32)
-        HMODULE library;
-#endif
-        PFN_vkGetInstanceProcAddr ptr_vkGetInstanceProcAddr = VK_NULL_HANDLE;
 
-        VulkanLibrary() {
+#if defined(__linux__) || defined(__APPLE__)
+    void* library = nullptr;
+#elif defined(_WIN32)
+    HMODULE library = nullptr;
+#endif
+
+    bool load_vulkan_library() {
+        // Can immediately return if it has already been loaded
+        if (library) {
+            return true;
+        }
 #if defined(__linux__)
-            library = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
-            if (!library) library = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+        library = dlopen("libvulkan.so.1", RTLD_NOW | RTLD_LOCAL);
+        if (!library) library = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
 #elif defined(__APPLE__)
-            library = dlopen("libvulkan.dylib", RTLD_NOW | RTLD_LOCAL);
-            if (!library) library = dlopen("libvulkan.1.dylib", RTLD_NOW | RTLD_LOCAL);
+        library = dlopen("libvulkan.dylib", RTLD_NOW | RTLD_LOCAL);
+        if (!library) library = dlopen("libvulkan.1.dylib", RTLD_NOW | RTLD_LOCAL);
+        if (!library) library = dlopen("libMoltenVK.dylib", RTLD_NOW | RTLD_LOCAL);
 #elif defined(_WIN32)
-            library = LoadLibrary(TEXT("vulkan-1.dll"));
+        library = LoadLibrary(TEXT("vulkan-1.dll"));
 #else
-            assert(false && "Unsupported platform");
+        assert(false && "Unsupported platform");
 #endif
-            if (!library) return;
-            load_func(ptr_vkGetInstanceProcAddr, "vkGetInstanceProcAddr");
-        }
-
-        template <typename T> void load_func(T& func_dest, const char* func_name) {
-#if defined(__linux__) || defined(__APPLE__)
-            func_dest = reinterpret_cast<T>(dlsym(library, func_name));
-#elif defined(_WIN32)
-            func_dest = reinterpret_cast<T>(GetProcAddress(library, func_name));
-#endif
-        }
-        void close() {
-#if defined(__linux__) || defined(__APPLE__)
-            dlclose(library);
-#elif defined(_WIN32)
-            FreeLibrary(library);
-#endif
-            library = 0;
-        }
-    };
-    VulkanLibrary& get_vulkan_library() {
-        static VulkanLibrary lib;
-        return lib;
+        if (!library) return false;
+        load_func(ptr_vkGetInstanceProcAddr, "vkGetInstanceProcAddr");
+        return ptr_vkGetInstanceProcAddr != nullptr;
     }
 
-    bool load_vulkan(PFN_vkGetInstanceProcAddr fp_vkGetInstanceProcAddr = nullptr) {
+    template <typename T> void load_func(T& func_dest, const char* func_name) {
+#if defined(__linux__) || defined(__APPLE__)
+        func_dest = reinterpret_cast<T>(dlsym(library, func_name));
+#elif defined(_WIN32)
+        func_dest = reinterpret_cast<T>(GetProcAddress(library, func_name));
+#endif
+    }
+    void close() {
+#if defined(__linux__) || defined(__APPLE__)
+        dlclose(library);
+#elif defined(_WIN32)
+        FreeLibrary(library);
+#endif
+        library = 0;
+    }
+
+    public:
+    bool init_vulkan_funcs(PFN_vkGetInstanceProcAddr fp_vkGetInstanceProcAddr = nullptr) {
+        std::lock_guard<std::mutex> lg(init_mutex);
         if (fp_vkGetInstanceProcAddr != nullptr) {
             ptr_vkGetInstanceProcAddr = fp_vkGetInstanceProcAddr;
-            return true;
         } else {
-            auto& lib = get_vulkan_library();
-            ptr_vkGetInstanceProcAddr = lib.ptr_vkGetInstanceProcAddr;
-            return lib.library != nullptr && lib.ptr_vkGetInstanceProcAddr != VK_NULL_HANDLE;
+            bool ret = load_vulkan_library();
+            if (!ret) return false;
         }
-    }
 
-    void init_pre_instance_funcs() {
         fp_vkEnumerateInstanceExtensionProperties = reinterpret_cast<PFN_vkEnumerateInstanceExtensionProperties>(
             ptr_vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkEnumerateInstanceExtensionProperties"));
         fp_vkEnumerateInstanceLayerProperties = reinterpret_cast<PFN_vkEnumerateInstanceLayerProperties>(
@@ -115,6 +113,7 @@ class VulkanFunctions {
             ptr_vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkEnumerateInstanceVersion"));
         fp_vkCreateInstance =
             reinterpret_cast<PFN_vkCreateInstance>(ptr_vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkCreateInstance"));
+        return true;
     }
 
     public:
@@ -133,25 +132,21 @@ class VulkanFunctions {
     PFN_vkEnumerateInstanceLayerProperties fp_vkEnumerateInstanceLayerProperties = nullptr;
     PFN_vkEnumerateInstanceVersion fp_vkEnumerateInstanceVersion = nullptr;
     PFN_vkCreateInstance fp_vkCreateInstance = nullptr;
-    PFN_vkDestroyInstance fp_vkDestroyInstance = nullptr;
 
+    PFN_vkDestroyInstance fp_vkDestroyInstance = nullptr;
+    PFN_vkCreateDebugUtilsMessengerEXT fp_vkCreateDebugUtilsMessengerEXT = nullptr;
+    PFN_vkDestroyDebugUtilsMessengerEXT fp_vkDestroyDebugUtilsMessengerEXT = nullptr;
     PFN_vkEnumeratePhysicalDevices fp_vkEnumeratePhysicalDevices = nullptr;
     PFN_vkGetPhysicalDeviceFeatures fp_vkGetPhysicalDeviceFeatures = nullptr;
     PFN_vkGetPhysicalDeviceFeatures2 fp_vkGetPhysicalDeviceFeatures2 = nullptr;
     PFN_vkGetPhysicalDeviceFeatures2KHR fp_vkGetPhysicalDeviceFeatures2KHR = nullptr;
-    PFN_vkGetPhysicalDeviceFormatProperties fp_vkGetPhysicalDeviceFormatProperties = nullptr;
-    PFN_vkGetPhysicalDeviceImageFormatProperties fp_vkGetPhysicalDeviceImageFormatProperties = nullptr;
     PFN_vkGetPhysicalDeviceProperties fp_vkGetPhysicalDeviceProperties = nullptr;
-    PFN_vkGetPhysicalDeviceProperties2 fp_vkGetPhysicalDeviceProperties2 = nullptr;
     PFN_vkGetPhysicalDeviceQueueFamilyProperties fp_vkGetPhysicalDeviceQueueFamilyProperties = nullptr;
-    PFN_vkGetPhysicalDeviceQueueFamilyProperties2 fp_vkGetPhysicalDeviceQueueFamilyProperties2 = nullptr;
     PFN_vkGetPhysicalDeviceMemoryProperties fp_vkGetPhysicalDeviceMemoryProperties = nullptr;
-    PFN_vkGetPhysicalDeviceFormatProperties2 fp_vkGetPhysicalDeviceFormatProperties2 = nullptr;
-    PFN_vkGetPhysicalDeviceMemoryProperties2 fp_vkGetPhysicalDeviceMemoryProperties2 = nullptr;
-
-    PFN_vkGetDeviceProcAddr fp_vkGetDeviceProcAddr = nullptr;
-    PFN_vkCreateDevice fp_vkCreateDevice = nullptr;
     PFN_vkEnumerateDeviceExtensionProperties fp_vkEnumerateDeviceExtensionProperties = nullptr;
+
+    PFN_vkCreateDevice fp_vkCreateDevice = nullptr;
+    PFN_vkGetDeviceProcAddr fp_vkGetDeviceProcAddr = nullptr;
 
     PFN_vkDestroySurfaceKHR fp_vkDestroySurfaceKHR = nullptr;
     PFN_vkGetPhysicalDeviceSurfaceSupportKHR fp_vkGetPhysicalDeviceSurfaceSupportKHR = nullptr;
@@ -159,33 +154,23 @@ class VulkanFunctions {
     PFN_vkGetPhysicalDeviceSurfacePresentModesKHR fp_vkGetPhysicalDeviceSurfacePresentModesKHR = nullptr;
     PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR fp_vkGetPhysicalDeviceSurfaceCapabilitiesKHR = nullptr;
 
-    bool init_vulkan_funcs(PFN_vkGetInstanceProcAddr fp_vkGetInstanceProcAddr) {
-        std::lock_guard<std::mutex> lg(init_mutex);
-        if (!load_vulkan(fp_vkGetInstanceProcAddr)) return false;
-        init_pre_instance_funcs();
-        return true;
-    }
-
     void init_instance_funcs(VkInstance inst) {
         instance = inst;
         get_inst_proc_addr(fp_vkDestroyInstance, "vkDestroyInstance");
+        get_inst_proc_addr(fp_vkCreateDebugUtilsMessengerEXT, "vkCreateDebugUtilsMessengerEXT");
+        get_inst_proc_addr(fp_vkDestroyDebugUtilsMessengerEXT, "vkDestroyDebugUtilsMessengerEXT");
         get_inst_proc_addr(fp_vkEnumeratePhysicalDevices, "vkEnumeratePhysicalDevices");
+
         get_inst_proc_addr(fp_vkGetPhysicalDeviceFeatures, "vkGetPhysicalDeviceFeatures");
         get_inst_proc_addr(fp_vkGetPhysicalDeviceFeatures2, "vkGetPhysicalDeviceFeatures2");
         get_inst_proc_addr(fp_vkGetPhysicalDeviceFeatures2KHR, "vkGetPhysicalDeviceFeatures2KHR");
-        get_inst_proc_addr(fp_vkGetPhysicalDeviceFormatProperties, "vkGetPhysicalDeviceFormatProperties");
-        get_inst_proc_addr(fp_vkGetPhysicalDeviceImageFormatProperties, "vkGetPhysicalDeviceImageFormatProperties");
         get_inst_proc_addr(fp_vkGetPhysicalDeviceProperties, "vkGetPhysicalDeviceProperties");
-        get_inst_proc_addr(fp_vkGetPhysicalDeviceProperties2, "vkGetPhysicalDeviceProperties2");
         get_inst_proc_addr(fp_vkGetPhysicalDeviceQueueFamilyProperties, "vkGetPhysicalDeviceQueueFamilyProperties");
-        get_inst_proc_addr(fp_vkGetPhysicalDeviceQueueFamilyProperties2, "vkGetPhysicalDeviceQueueFamilyProperties2");
         get_inst_proc_addr(fp_vkGetPhysicalDeviceMemoryProperties, "vkGetPhysicalDeviceMemoryProperties");
-        get_inst_proc_addr(fp_vkGetPhysicalDeviceFormatProperties2, "vkGetPhysicalDeviceFormatProperties2");
-        get_inst_proc_addr(fp_vkGetPhysicalDeviceMemoryProperties2, "vkGetPhysicalDeviceMemoryProperties2");
-
-        get_inst_proc_addr(fp_vkGetDeviceProcAddr, "vkGetDeviceProcAddr");
-        get_inst_proc_addr(fp_vkCreateDevice, "vkCreateDevice");
         get_inst_proc_addr(fp_vkEnumerateDeviceExtensionProperties, "vkEnumerateDeviceExtensionProperties");
+
+        get_inst_proc_addr(fp_vkCreateDevice, "vkCreateDevice");
+        get_inst_proc_addr(fp_vkGetDeviceProcAddr, "vkGetDeviceProcAddr");
 
         get_inst_proc_addr(fp_vkDestroySurfaceKHR, "vkDestroySurfaceKHR");
         get_inst_proc_addr(fp_vkGetPhysicalDeviceSurfaceSupportKHR, "vkGetPhysicalDeviceSurfaceSupportKHR");
@@ -195,7 +180,7 @@ class VulkanFunctions {
     }
 };
 
-VulkanFunctions& vulkan_functions() {
+static VulkanFunctions& vulkan_functions() {
     static VulkanFunctions v;
     return v;
 }
@@ -269,11 +254,9 @@ VkResult create_debug_utils_messenger(VkInstance instance,
     messengerCreateInfo.pfnUserCallback = debug_callback;
     messengerCreateInfo.pUserData = user_data_pointer;
 
-    PFN_vkCreateDebugUtilsMessengerEXT createMessengerFunc;
-    detail::vulkan_functions().get_inst_proc_addr(createMessengerFunc, "vkCreateDebugUtilsMessengerEXT");
-
-    if (createMessengerFunc != nullptr) {
-        return createMessengerFunc(instance, &messengerCreateInfo, allocation_callbacks, pDebugMessenger);
+    if (detail::vulkan_functions().fp_vkCreateDebugUtilsMessengerEXT != nullptr) {
+        return detail::vulkan_functions().fp_vkCreateDebugUtilsMessengerEXT(
+            instance, &messengerCreateInfo, allocation_callbacks, pDebugMessenger);
     } else {
         return VK_ERROR_EXTENSION_NOT_PRESENT;
     }
@@ -282,11 +265,8 @@ VkResult create_debug_utils_messenger(VkInstance instance,
 void destroy_debug_utils_messenger(
     VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, VkAllocationCallbacks* allocation_callbacks) {
 
-    PFN_vkDestroyDebugUtilsMessengerEXT deleteMessengerFunc;
-    detail::vulkan_functions().get_inst_proc_addr(deleteMessengerFunc, "vkDestroyDebugUtilsMessengerEXT");
-
-    if (deleteMessengerFunc != nullptr) {
-        deleteMessengerFunc(instance, debugMessenger, allocation_callbacks);
+    if (detail::vulkan_functions().fp_vkDestroyDebugUtilsMessengerEXT != nullptr) {
+        detail::vulkan_functions().fp_vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, allocation_callbacks);
     }
 }
 
@@ -509,7 +489,7 @@ bool SystemInfo::is_layer_available(const char* layer_name) const {
     if (!layer_name) return false;
     return detail::check_layer_supported(available_layers, layer_name);
 }
-void destroy_surface(Instance instance, VkSurfaceKHR surface) {
+void destroy_surface(Instance const& instance, VkSurfaceKHR surface) {
     if (instance.instance != VK_NULL_HANDLE && surface != VK_NULL_HANDLE) {
         detail::vulkan_functions().fp_vkDestroySurfaceKHR(instance.instance, surface, instance.allocation_callbacks);
     }
@@ -519,7 +499,7 @@ void destroy_surface(VkInstance instance, VkSurfaceKHR surface, VkAllocationCall
         detail::vulkan_functions().fp_vkDestroySurfaceKHR(instance, surface, callbacks);
     }
 }
-void destroy_instance(Instance instance) {
+void destroy_instance(Instance const& instance) {
     if (instance.instance != VK_NULL_HANDLE) {
         if (instance.debug_messenger != VK_NULL_HANDLE)
             destroy_debug_utils_messenger(instance.instance, instance.debug_messenger, instance.allocation_callbacks);
@@ -788,6 +768,19 @@ InstanceBuilder& InstanceBuilder::enable_extension(const char* extension_name) {
     info.extensions.push_back(extension_name);
     return *this;
 }
+InstanceBuilder& InstanceBuilder::enable_extensions(std::vector<const char*> const& extensions) {
+    for (const auto extension : extensions) {
+        info.extensions.push_back(extension);
+    }
+    return *this;
+}
+InstanceBuilder& InstanceBuilder::enable_extensions(size_t count, const char* const* extensions) {
+    if (!extensions || count == 0) return *this;
+    for (size_t i = 0; i < count; i++) {
+        info.extensions.push_back(extensions[i]);
+    }
+    return *this;
+}
 InstanceBuilder& InstanceBuilder::enable_validation_layers(bool enable_validation) {
     info.enable_validation_layers = enable_validation;
     return *this;
@@ -930,7 +923,13 @@ bool supports_features(VkPhysicalDeviceFeatures supported,
 	if (requested.variableMultisampleRate && !supported.variableMultisampleRate) return false;
 	if (requested.inheritedQueries && !supported.inheritedQueries) return false;
 
-	for(size_t i = 0; i < extension_requested.size(); ++i) {
+    // Should only be false if extension_supported was unable to be filled out, due to the
+    // physical device not supporting vkGetPhysicalDeviceFeatures2 in any capacity.
+    if (extension_requested.size() != extension_supported.size()) {
+        return false;
+    }
+
+	for(size_t i = 0; i < extension_requested.size() && i < extension_supported.size(); ++i) {
 		auto res = GenericFeaturesPNextNode::match(extension_requested[i], extension_supported[i]);
 		if(!res) return false;
 	}
@@ -1011,7 +1010,7 @@ PhysicalDevice PhysicalDeviceSelector::populate_device_details(VkPhysicalDevice 
         available_extensions, detail::vulkan_functions().fp_vkEnumerateDeviceExtensionProperties, vk_phys_device, nullptr);
     if (available_extensions_ret != VK_SUCCESS) return physical_device;
     for (const auto& ext : available_extensions) {
-        physical_device.extensions.push_back(&ext.extensionName[0]);
+        physical_device.available_extensions.push_back(&ext.extensionName[0]);
     }
 
     physical_device.features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2; // same value as the non-KHR version
@@ -1072,11 +1071,12 @@ PhysicalDevice::Suitable PhysicalDeviceSelector::is_device_suitable(PhysicalDevi
     if (criteria.require_present && !present_queue && !criteria.defer_surface_initialization)
         return PhysicalDevice::Suitable::no;
 
-    auto required_extensions_supported = detail::check_device_extension_support(pd.extensions, criteria.required_extensions);
+    auto required_extensions_supported =
+        detail::check_device_extension_support(pd.available_extensions, criteria.required_extensions);
     if (required_extensions_supported.size() != criteria.required_extensions.size())
         return PhysicalDevice::Suitable::no;
 
-    auto desired_extensions_supported = detail::check_device_extension_support(pd.extensions, criteria.desired_extensions);
+    auto desired_extensions_supported = detail::check_device_extension_support(pd.available_extensions, criteria.desired_extensions);
     if (desired_extensions_supported.size() != criteria.desired_extensions.size())
         suitable = PhysicalDevice::Suitable::partial;
 
@@ -1166,19 +1166,20 @@ Result<std::vector<PhysicalDevice>> PhysicalDeviceSelector::select_impl(DeviceSe
         phys_dev.features = criteria.required_features;
         phys_dev.extended_features_chain = criteria.extended_features_chain;
         bool portability_ext_available = false;
-        for (const auto& ext : phys_dev.extensions)
+        for (const auto& ext : phys_dev.available_extensions)
             if (criteria.enable_portability_subset && ext == "VK_KHR_portability_subset")
                 portability_ext_available = true;
 
-        auto desired_extensions_supported = detail::check_device_extension_support(phys_dev.extensions, criteria.desired_extensions);
+        auto desired_extensions_supported =
+            detail::check_device_extension_support(phys_dev.available_extensions, criteria.desired_extensions);
 
-        phys_dev.extensions.clear();
-        phys_dev.extensions.insert(
-            phys_dev.extensions.end(), criteria.required_extensions.begin(), criteria.required_extensions.end());
-        phys_dev.extensions.insert(
-            phys_dev.extensions.end(), desired_extensions_supported.begin(), desired_extensions_supported.end());
+        phys_dev.extensions_to_enable.clear();
+        phys_dev.extensions_to_enable.insert(
+            phys_dev.extensions_to_enable.end(), criteria.required_extensions.begin(), criteria.required_extensions.end());
+        phys_dev.extensions_to_enable.insert(
+            phys_dev.extensions_to_enable.end(), desired_extensions_supported.begin(), desired_extensions_supported.end());
         if (portability_ext_available) {
-            phys_dev.extensions.push_back("VK_KHR_portability_subset");
+            phys_dev.extensions_to_enable.push_back("VK_KHR_portability_subset");
         }
     };
 
@@ -1298,9 +1299,16 @@ PhysicalDeviceSelector& PhysicalDeviceSelector::add_required_extension(const cha
     criteria.required_extensions.push_back(extension);
     return *this;
 }
-PhysicalDeviceSelector& PhysicalDeviceSelector::add_required_extensions(std::vector<const char*> extensions) {
+PhysicalDeviceSelector& PhysicalDeviceSelector::add_required_extensions(std::vector<const char*> const& extensions) {
     for (const auto& ext : extensions) {
         criteria.required_extensions.push_back(ext);
+    }
+    return *this;
+}
+PhysicalDeviceSelector& PhysicalDeviceSelector::add_required_extensions(size_t count, const char* const* extensions) {
+    if (!extensions || count == 0) return *this;
+    for (size_t i = 0; i < count; i++) {
+        criteria.required_extensions.push_back(extensions[i]);
     }
     return *this;
 }
@@ -1374,7 +1382,35 @@ bool PhysicalDevice::has_separate_transfer_queue() const {
     return detail::get_separate_queue_index(queue_families, VK_QUEUE_TRANSFER_BIT, VK_QUEUE_COMPUTE_BIT) != detail::QUEUE_INDEX_MAX_VALUE;
 }
 std::vector<VkQueueFamilyProperties> PhysicalDevice::get_queue_families() const { return queue_families; }
-std::vector<std::string> PhysicalDevice::get_extensions() const { return extensions; }
+std::vector<std::string> PhysicalDevice::get_extensions() const { return extensions_to_enable; }
+std::vector<std::string> PhysicalDevice::get_available_extensions() const { return available_extensions; }
+bool PhysicalDevice::is_extension_present(const char* ext) const {
+    return std::find_if(std::begin(available_extensions), std::end(available_extensions), [ext](std::string const& ext_name) {
+        return ext_name == ext;
+    }) != std::end(available_extensions);
+}
+bool PhysicalDevice::enable_extension_if_present(const char* extension) {
+    auto it = std::find_if(std::begin(available_extensions),
+        std::end(available_extensions),
+        [extension](std::string const& ext_name) { return ext_name == extension; });
+    if (it != std::end(available_extensions)) {
+        extensions_to_enable.push_back(extension);
+        return true;
+    }
+    return false;
+}
+bool PhysicalDevice::enable_extensions_if_present(const std::vector<const char*>& extensions) { 
+    for (const auto extension : extensions) {
+        auto it = std::find_if(std::begin(available_extensions),
+            std::end(available_extensions),
+            [extension](std::string const& ext_name) { return ext_name == extension; });
+        if (it == std::end(available_extensions)) return false;
+    }
+    for (const auto extension : extensions)
+        extensions_to_enable.push_back(extension);
+    return true;
+}
+
 PhysicalDevice::operator VkPhysicalDevice() const { return this->physical_device; }
 
 // ---- Queues ---- //
@@ -1443,12 +1479,10 @@ DispatchTable Device::make_table() const { return { device, fp_vkGetDeviceProcAd
 
 Device::operator VkDevice() const { return this->device; }
 
-CustomQueueDescription::CustomQueueDescription(uint32_t index, uint32_t count, std::vector<float> priorities)
-: index(index), count(count), priorities(priorities) {
-    assert(count == priorities.size());
-}
+CustomQueueDescription::CustomQueueDescription(uint32_t index, std::vector<float> priorities)
+: index(index), priorities(priorities) {}
 
-void destroy_device(Device device) {
+void destroy_device(Device const& device) {
     device.internal_table.fp_vkDestroyDevice(device.device, device.allocation_callbacks);
 }
 
@@ -1461,7 +1495,7 @@ Result<Device> DeviceBuilder::build() const {
 
     if (queue_descriptions.size() == 0) {
         for (uint32_t i = 0; i < physical_device.queue_families.size(); i++) {
-            queue_descriptions.push_back(CustomQueueDescription{ i, 1, std::vector<float>{ 1.0f } });
+            queue_descriptions.push_back(CustomQueueDescription{ i, std::vector<float>{ 1.0f } });
         }
     }
 
@@ -1470,17 +1504,17 @@ Result<Device> DeviceBuilder::build() const {
         VkDeviceQueueCreateInfo queue_create_info = {};
         queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queue_create_info.queueFamilyIndex = desc.index;
-        queue_create_info.queueCount = desc.count;
+        queue_create_info.queueCount = static_cast<std::uint32_t>(desc.priorities.size());
         queue_create_info.pQueuePriorities = desc.priorities.data();
         queueCreateInfos.push_back(queue_create_info);
     }
 
-    std::vector<const char*> extensions;
-    for (const auto& ext : physical_device.extensions) {
-        extensions.push_back(ext.c_str());
+    std::vector<const char*> extensions_to_enable;
+    for (const auto& ext : physical_device.extensions_to_enable) {
+        extensions_to_enable.push_back(ext.c_str());
     }
     if (physical_device.surface != VK_NULL_HANDLE || physical_device.defer_surface_initialization)
-        extensions.push_back({ VK_KHR_SWAPCHAIN_EXTENSION_NAME });
+        extensions_to_enable.push_back({ VK_KHR_SWAPCHAIN_EXTENSION_NAME });
 
     std::vector<VkBaseOutStructure*> final_pnext_chain;
     VkDeviceCreateInfo device_create_info = {};
@@ -1529,8 +1563,8 @@ Result<Device> DeviceBuilder::build() const {
     device_create_info.flags = info.flags;
     device_create_info.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
     device_create_info.pQueueCreateInfos = queueCreateInfos.data();
-    device_create_info.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-    device_create_info.ppEnabledExtensionNames = extensions.data();
+    device_create_info.enabledExtensionCount = static_cast<uint32_t>(extensions_to_enable.size());
+    device_create_info.ppEnabledExtensionNames = extensions_to_enable.data();
 
     Device device;
 

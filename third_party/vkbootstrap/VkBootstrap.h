@@ -80,6 +80,7 @@ template <typename T> class Result {
             new (&m_value) T{ result.m_value };
         else
             m_error = result.m_error;
+        return *this;
     }
     Result(Result&& expected) noexcept : m_init(expected.m_init) {
         if (m_init)
@@ -94,6 +95,7 @@ template <typename T> class Result {
             new (&m_value) T{ std::move(result.m_value) };
         else
             m_error = std::move(result.m_error);
+        return *this;
     }
     Result& operator=(const T& expect) noexcept {
         destroy();
@@ -299,9 +301,9 @@ struct Instance {
     friend class PhysicalDeviceSelector;
 };
 
-void destroy_surface(Instance instance, VkSurfaceKHR surface); // release surface handle
+void destroy_surface(Instance const& instance, VkSurfaceKHR surface); // release surface handle
 void destroy_surface(VkInstance instance, VkSurfaceKHR surface, VkAllocationCallbacks* callbacks = nullptr); // release surface handle
-void destroy_instance(Instance instance); // release instance resources
+void destroy_instance(Instance const& instance); // release instance resources
 
 /* If headless mode is false, by default vk-bootstrap use the following logic to enable the windowing extensions
 
@@ -375,6 +377,8 @@ class InstanceBuilder {
     InstanceBuilder& enable_layer(const char* layer_name);
     // Adds an extension to be enabled. Will fail to create an instance if the extension isn't available.
     InstanceBuilder& enable_extension(const char* extension_name);
+    InstanceBuilder& enable_extensions(std::vector<const char*> const& extensions);
+    InstanceBuilder& enable_extensions(size_t count, const char* const* extensions);
 
     // Headless Mode does not load the required extensions for presentation. Defaults to true.
     InstanceBuilder& set_headless(bool headless = true);
@@ -495,13 +499,28 @@ struct PhysicalDevice {
     // Query the list of extensions which should be enabled
     std::vector<std::string> get_extensions() const;
 
+    // Query the list of extensions which the physical device supports
+    std::vector<std::string> get_available_extensions() const;
+
+    // Returns true if an extension should be enabled on the device
+    bool is_extension_present(const char* extension) const;
+
+    // If the given extension is present, make the extension be enabled on the device.
+    // Returns true the extension is present.
+    bool enable_extension_if_present(const char* extension);
+
+    // If all the given extensions are present, make all the extensions be enabled on the device.
+    // Returns true if all the extensions are present.
+    bool enable_extensions_if_present(const std::vector<const char*>& extensions);
+
     // A conversion function which allows this PhysicalDevice to be used
     // in places where VkPhysicalDevice would have been used.
     operator VkPhysicalDevice() const;
 
     private:
     uint32_t instance_version = VKB_VK_API_VERSION_1_0;
-    std::vector<std::string> extensions;
+    std::vector<std::string> extensions_to_enable;
+    std::vector<std::string> available_extensions;
     std::vector<VkQueueFamilyProperties> queue_families;
     std::vector<detail::GenericFeaturesPNextNode> extended_features_chain;
     VkPhysicalDeviceFeatures2 features2{};
@@ -572,17 +591,18 @@ class PhysicalDeviceSelector {
     // Require a memory heap from VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT with `size` memory available.
     PhysicalDeviceSelector& required_device_memory_size(VkDeviceSize size);
     // Prefer a memory heap from VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT with `size` memory available.
-    PhysicalDeviceSelector& desired_device_memory_size(VkDeviceSize size);
+    [[deprecated]] PhysicalDeviceSelector& desired_device_memory_size(VkDeviceSize size);
 
     // Require a physical device which supports a specific extension.
     PhysicalDeviceSelector& add_required_extension(const char* extension);
     // Require a physical device which supports a set of extensions.
-    PhysicalDeviceSelector& add_required_extensions(std::vector<const char*> extensions);
+    PhysicalDeviceSelector& add_required_extensions(std::vector<const char*> const& extensions);
+    PhysicalDeviceSelector& add_required_extensions(size_t count, const char* const* extensions);
 
     // Prefer a physical device which supports a specific extension.
-    PhysicalDeviceSelector& add_desired_extension(const char* extension);
+    [[deprecated]] PhysicalDeviceSelector& add_desired_extension(const char* extension);
     // Prefer a physical device which supports a set of extensions.
-    PhysicalDeviceSelector& add_desired_extensions(std::vector<const char*> extensions);
+    [[deprecated]] PhysicalDeviceSelector& add_desired_extensions(std::vector<const char*> extensions);
 
     // Prefer a physical device that supports a (major, minor) version of vulkan.
     [[deprecated("Use set_minimum_version + InstanceBuilder::require_api_version.")]] PhysicalDeviceSelector&
@@ -679,7 +699,7 @@ enum class QueueType { present, graphics, compute, transfer };
 
 namespace detail {
 // Sentinel value, used in implementation only
-const uint32_t QUEUE_INDEX_MAX_VALUE = 65536;
+inline const uint32_t QUEUE_INDEX_MAX_VALUE = 65536;
 } // namespace detail
 
 // ---- Device ---- //
@@ -714,18 +734,18 @@ struct Device {
         PFN_vkDestroyDevice fp_vkDestroyDevice = nullptr;
     } internal_table;
     friend class DeviceBuilder;
-    friend void destroy_device(Device device);
+    friend void destroy_device(Device const& device);
 };
+
 
 // For advanced device queue setup
 struct CustomQueueDescription {
-    explicit CustomQueueDescription(uint32_t index, uint32_t count, std::vector<float> priorities);
+    explicit CustomQueueDescription(uint32_t index, std::vector<float> priorities);
     uint32_t index = 0;
-    uint32_t count = 0;
     std::vector<float> priorities;
 };
 
-void destroy_device(Device device);
+void destroy_device(Device const& device);
 
 class DeviceBuilder {
     public:
