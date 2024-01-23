@@ -226,3 +226,27 @@ VkSubmitInfo vkinit::submit_info(VkCommandBuffer* cmd) {
 	info.pSignalSemaphores = nullptr;
 	return info;
 }
+
+VkSamplerCreateInfo vkinit::sampler_create_info(VkFilter filters, VkSamplerAddressMode sampler_address_mode) {
+    VkSamplerCreateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    info.pNext = nullptr;
+    info.magFilter = filters;
+    info.minFilter = filters;
+    info.addressModeU = sampler_address_mode;
+    info.addressModeV = sampler_address_mode;
+    info.addressModeW = sampler_address_mode;
+    return info;
+}
+
+VkWriteDescriptorSet vkinit::write_descriptor_image(VkDescriptorType type, VkDescriptorSet dst_set, VkDescriptorImageInfo* image_info, uint32_t binding) {
+    VkWriteDescriptorSet write = {};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.pNext = nullptr;
+    write.dstBinding = binding;
+    write.dstSet = dst_set;
+    write.descriptorCount = 1;
+    write.descriptorType = type;
+    write.pImageInfo = image_info;
+    return write;
+}

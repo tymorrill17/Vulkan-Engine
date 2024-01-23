@@ -36,6 +36,7 @@ struct MeshPushConstants {
 };
 
 struct Material {
+	VkDescriptorSet texture_set{VK_NULL_HANDLE};
 	VkPipeline pipeline;
 	VkPipelineLayout pipeline_layout;
 };
@@ -79,6 +80,11 @@ struct UploadContext {
 	VkFence upload_fence;
 	VkCommandPool command_pool;
 	VkCommandBuffer command_buffer;
+};
+
+struct Texture {
+	AllocatedImage image;
+	VkImageView image_view;
 };
 
 constexpr unsigned int FRAME_OVERLAP = 2;
@@ -125,6 +131,7 @@ public:
 	std::vector<RenderObject> renderables; // default array of renderable objects
 	std::unordered_map<std::string,Material> materials;
 	std::unordered_map<std::string,Mesh> meshes;
+	std::unordered_map<std::string,Texture> loaded_textures;
 	// Descriptor Sets
 	VkDescriptorSetLayout global_set_layout;
 	VkDescriptorSetLayout object_set_layout;
@@ -133,6 +140,8 @@ public:
 	AllocatedBuffer scene_parameter_buffer;
 	// To copy data to GPU memory
 	UploadContext upload_context;
+	// Texture descriptor set layout
+	VkDescriptorSetLayout single_texture_set_layout;
 
 
 	int selectedShader{0}; // 0 -> red triangle, 1 -> colored triangle
@@ -147,38 +156,29 @@ public:
 	glm::vec3 up = {0.0f, 1.0f, 0.0f};
 	// std::unordered_map<SDL_Keycode, bool> keyboard; // Will this work to keep track of the keyboard since SDL_Keycode is enumerated??
 
-	// Main functions
-	//initializes everything in the engine
-	void init();
-	//shuts down the engine
-	void cleanup();
-	//draw loop
-	void draw();
-	//run main loop
-	void run();
+	// :::::::::::::::::::::::::: Main Functions ::::::::::::::::::::::::::
+	void init(); // Initializes engine
+	void cleanup(); // Closes and cleans the engine
+	void draw(); // Draw loop
+	void run(); // Start the main loop
 
-	// Scene functions
-	// Create materials and add them to the map
-	Material* create_material(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name);
-	// Returns nullptr if not found
-	Material* get_material(const std::string& name);
-	// Returns nullptr if not found
-	Mesh* get_mesh(const std::string& name);
-
-	// Returns true if lhs < rhs
-	FrameData& get_current_frame();
+	// :::::::::::::::::::::::::: Utility Functions ::::::::::::::::::::::::::
+	FrameData& get_current_frame(); // Returns true if lhs < rhs
 
 	// Function to compare renderable objects to be able to sort them (and thus reduce the number of bindings and load them in faster)
 	// TODO: Later when it will actually make a difference
+	// May be able to just sort by memory address. Should probably move this to the Material/Mesh structs
 	bool renderable_sorter(RenderObject const& lhs, RenderObject const& rhs) {
 		return false;
 	}
-	// Pad the uniform buffer sizes to align them properly with the minimum alignment size
-	size_t pad_uniform_buffer_size(size_t original_size);
-	// immediately execute command
-	void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
+	size_t pad_uniform_buffer_size(size_t original_size); // Pad the uniform buffer sizes to align them properly with the minimum alignment size
+	void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function); // Immediately execute command
+
+	// :::::::::::::::::::::::::: Create Functions ::::::::::::::::::::::::::
+	AllocatedBuffer create_buffer(size_t alloc_size, VkBufferUsageFlags usage_flags, VmaMemoryUsage memory_usage); // Create and allocate a buffer
 
 private:
+// :::::::::::::::::::::::::: Initialization Functions ::::::::::::::::::::::::::
 	void init_vulkan();
 	void init_swapchain();
 	void init_commands();
@@ -186,11 +186,18 @@ private:
 	void init_framebuffers();
 	void init_sync();
 	void init_pipelines();
+	void init_descriptors();
+
+	// :::::::::::::::::::::::::: Loading Functions ::::::::::::::::::::::::::
 	bool load_shader_module(const char* filepath, VkShaderModule* out_shader_module);
 	void load_meshes();
-	void upload_mesh(Mesh& mesh);
+	void load_images();
+	void upload_mesh(Mesh& mesh); // Loads a mesh to a CPU buffer then transfers to GPU memory
+
+	// :::::::::::::::::::::::::: Scene-Related Functions ::::::::::::::::::::::::::
 	void draw_objects(VkCommandBuffer cmd, RenderObject* first, int count);
 	void init_scene();
-	AllocatedBuffer create_buffer(size_t alloc_size, VkBufferUsageFlags usage_flags, VmaMemoryUsage memory_usage);
-	void init_descriptors();
+	Material* create_material(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name); // Create materials and add them to the materials unordered_map
+	Material* get_material(const std::string& name); // Returns nullptr if not found
+	Mesh* get_mesh(const std::string& name); // Returns nullptr if not found
 };

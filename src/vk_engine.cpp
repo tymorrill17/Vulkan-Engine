@@ -8,6 +8,7 @@
 #include "vk_initializers.h"
 #include "vk_pipeline.h"
 #include "VkBootstrap.h"
+#include "vk_texture.h"
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
@@ -53,6 +54,7 @@ void VulkanEngine::init() {
 	init_descriptors();
 	init_pipelines();
 
+	load_images();
 	load_meshes();
 	init_scene();
 	//everything went fine
@@ -299,15 +301,22 @@ void VulkanEngine::init_pipelines() {
 	if (!load_shader_module("../shaders/default_lit.frag.spv", &triangleFragShader)) {
 		std::cout << "Error building the colored mesh shader module!" << std::endl;
 	} else {
-		std::cout << "Fragment shader module loaded!" << std::endl;
+		std::cout << "Fragment shader successfully loaded!" << std::endl;
 	}
 	VkShaderModule meshVertShader;
-	if (!load_shader_module("../shaders/tri_mesh.vert.spv", &meshVertShader))
-	{
-		std::cout << "Error when building the triangle vertex shader module" << std::endl;
+	if (!load_shader_module("../shaders/tri_mesh.vert.spv", &meshVertShader)) {
+		std::cout << "Error when building the triangle mesh vertex shader module!" << std::endl;
 	} else {
-		std::cout << "Triangle mesh vertex shader successfully loaded" << std::endl;
+		std::cout << "Triangle mesh vertex shader successfully loaded!" << std::endl;
 	}
+	VkShaderModule texturedMeshShader;
+	if (!load_shader_module("../shaders/texture_lit.frag.spv", &texturedMeshShader)) {
+		std::cout << "Error when building the textured fragment shader module!" << std::endl;
+	} else {
+		std::cout << "Textured fragment shader successfully loaded!" << std::endl;
+	}
+
+	// ::::::::::::::::::::::::: Building Mesh Triangle Pipeline :::::::::::::::::::::::::
 
 	// Build pipeline layout which controls inputs and outputs of the shader
 	VkPipelineLayoutCreateInfo mesh_pipeline_layout_info = vkinit::pipeline_layout_create_info();
@@ -368,12 +377,33 @@ void VulkanEngine::init_pipelines() {
 	mesh_pipeline = pipeline_builder.build_pipeline(device, render_pass);
 	create_material(mesh_pipeline, mesh_pipeline_layout, "default_mesh");
 
+	// ::::::::::::::::::::::::: Building Textured Drawing Pipeline :::::::::::::::::::::::::
+
+	// Create pipeline layout for the textured mesh pipeline that will have 3 descriptor sets
+	VkPipelineLayoutCreateInfo textured_pipeline_layout_info = mesh_pipeline_layout_info; // Start from the normal mesh layout
+	VkDescriptorSetLayout textured_set_layouts[] = {global_set_layout, object_set_layout, single_texture_set_layout};
+	textured_pipeline_layout_info.setLayoutCount = 3;
+	textured_pipeline_layout_info.pSetLayouts = textured_set_layouts;
+	VkPipelineLayout textured_pipeline_layout;
+	VK_CHECK(vkCreatePipelineLayout(device, &textured_pipeline_layout_info, nullptr, &textured_pipeline_layout));
+
+	pipeline_builder.shader_stages.clear();
+	pipeline_builder.shader_stages.push_back(vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, meshVertShader));
+	pipeline_builder.shader_stages.push_back(vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT, texturedMeshShader));
+	pipeline_builder.pipeline_layout = textured_pipeline_layout;
+
+	VkPipeline tex_pipeline = pipeline_builder.build_pipeline(device, render_pass);
+	create_material(tex_pipeline, textured_pipeline_layout, "textured_mesh");
+
 	// Destroy all shader modules outside of the deletion queue
 	vkDestroyShaderModule(device, triangleFragShader, nullptr);
 	vkDestroyShaderModule(device, meshVertShader, nullptr);
+	vkDestroyShaderModule(device, texturedMeshShader, nullptr);
 	main_deletion_queue.push_function([=](){
-		vkDestroyPipeline(device, mesh_pipeline, nullptr);
 		vkDestroyPipelineLayout(device, mesh_pipeline_layout, nullptr);
+		vkDestroyPipeline(device, mesh_pipeline, nullptr);
+		vkDestroyPipelineLayout(device, textured_pipeline_layout, nullptr);
+		vkDestroyPipeline(device, tex_pipeline, nullptr);
 	});
 }
 // Loads a shader module from a SPIR-V file. Returns false if there are errors.
@@ -431,13 +461,32 @@ void VulkanEngine::load_meshes() {
 	Mesh koenigsegg_mesh;
 	koenigsegg_mesh.load_from_obj(filename.c_str()); // Load monkey
 	upload_mesh(koenigsegg_mesh);
+
+	Mesh lost_empire;
+	lost_empire.load_from_obj("../assets/lost_empire.obj");
+	upload_mesh(lost_empire);
+
 	// Mesh ironman;
 	// ironman.load_from_obj("../../../Test/OBJ_Files/IronMan.obj");
 	// upload_mesh(ironman);
+
 	// Copy the meshes to the unordered list and delete them (later)
 	meshes["monkey"] = monkey_mesh;
 	meshes["koenigsegg"] = koenigsegg_mesh;
 	meshes["triangle"] = triangle_mesh;
+	meshes["lost empire"] = lost_empire;
+}
+// Loads all the images and textures from files
+void VulkanEngine::load_images() {
+	Texture lost_empire;
+	vkutil::load_image_from_file(*this, "../assets/lost_empire-RGBA.png", lost_empire.image);
+	VkImageViewCreateInfo ivci = vkinit::imageview_create_info(VK_FORMAT_R8G8B8A8_SRGB, lost_empire.image.image, VK_IMAGE_ASPECT_COLOR_BIT);
+	VK_CHECK(vkCreateImageView(device, &ivci, nullptr, &lost_empire.image_view));
+	loaded_textures["empire_diffuse"] = lost_empire;
+
+	main_deletion_queue.push_function([=](){
+		vkDestroyImageView(device, lost_empire.image_view, nullptr);
+	});
 }
 // Allocates CPU side buffer, fills it, then sends it to GPU memory
 void VulkanEngine::upload_mesh(Mesh& mesh) {
@@ -535,7 +584,8 @@ void VulkanEngine::init_descriptors() {
 	std::vector<VkDescriptorPoolSize> sizes = {
 		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10},
 		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 10},
-		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10}
+		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10},
+		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10} // Descriptor for combined sampler and image
 	};
 	VkDescriptorPoolCreateInfo pool_info={};
 	pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -551,7 +601,7 @@ void VulkanEngine::init_descriptors() {
 	VkDescriptorSetLayoutBinding camera_bind=vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 0);
 	// Create binding for scene parameter uniform buffer
 	VkDescriptorSetLayoutBinding scene_bind=vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1);
-	VkDescriptorSetLayoutBinding bindings[] = {camera_bind, scene_bind};
+	VkDescriptorSetLayoutBinding uniform_bindings[] = {camera_bind, scene_bind};
 	// Create the global descriptor set layout
 	// TODO: abstract this with vkinit?
 	VkDescriptorSetLayoutCreateInfo setinfo={};
@@ -559,7 +609,7 @@ void VulkanEngine::init_descriptors() {
 	setinfo.pNext = nullptr;
 	setinfo.bindingCount = 2; // Length of bindings[]
 	setinfo.flags = 0; // No flags
-	setinfo.pBindings = bindings;
+	setinfo.pBindings = uniform_bindings;
 	VK_CHECK(vkCreateDescriptorSetLayout(device, &setinfo, nullptr, &global_set_layout));
 
 	// Initialize Storage Buffer layouts
@@ -572,9 +622,20 @@ void VulkanEngine::init_descriptors() {
 	objsetinfo.pBindings = &object_bind;
 	VK_CHECK(vkCreateDescriptorSetLayout(device, &objsetinfo, nullptr, &object_set_layout));
 
+	// Texture descriptor set layout
+	VkDescriptorSetLayoutBinding texture_bind=vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
+	VkDescriptorSetLayoutCreateInfo texsetinfo={};
+	texsetinfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	texsetinfo.pNext = nullptr;
+	texsetinfo.bindingCount = 1;
+	texsetinfo.flags = 0;
+	texsetinfo.pBindings = &texture_bind;
+	VK_CHECK(vkCreateDescriptorSetLayout(device, &texsetinfo, nullptr, &single_texture_set_layout));
+
 	main_deletion_queue.push_function([&]() {
 		vkDestroyDescriptorSetLayout(device, object_set_layout, nullptr);
 		vkDestroyDescriptorSetLayout(device, global_set_layout, nullptr);
+		vkDestroyDescriptorSetLayout(device, single_texture_set_layout, nullptr);
 		vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
 	});
 	// Because of alignment, we need to increase the size of the buffer so that it fits 2 padded GPUSceneData structs
@@ -657,31 +718,63 @@ void VulkanEngine::cleanup() {
 }
 // Add objects to the scene
 void VulkanEngine::init_scene() {
-	RenderObject monkey;
-	monkey.mesh = get_mesh("monkey");
-	monkey.material = get_material("default_mesh");
-	monkey.transform_matrix = glm::translate(glm::mat4{1.0f}, glm::vec3(-5.0f, 0.0f, 0.0f));
-	// Add monkey to renderables list
-	renderables.push_back(monkey);
 
-	RenderObject koenigsegg;
-	koenigsegg.mesh = get_mesh("koenigsegg");
-	koenigsegg.material = get_material("default_mesh");
-	koenigsegg.transform_matrix = glm::translate(glm::mat4{1.0f}, glm::vec3(5.0f, 0.0f, 0.0f)) * glm::scale(glm::vec3{0.3});
-	renderables.push_back(koenigsegg);
-	// Add several triangles using a loop
-	for (int x = -20; x <= 20; x++) {
-		for (int y = -20; y <= 20; y++) {
-			RenderObject tri;
-			tri.mesh = get_mesh("triangle");
-			tri.material = get_material("default_mesh");
-			glm::mat4 translation = glm::translate(glm::mat4{ 1.0 }, glm::vec3(x, -10.0f, y));
-			glm::mat4 rotation = glm::rotate(glm::mat4{1.0f}, glm::radians(90.0f), glm::vec3(1.0f,0.0f,0.0f));
-			glm::mat4 scale = glm::scale(glm::mat4{ 1.0 }, glm::vec3(0.4, 0.4, 0.4));
-			tri.transform_matrix = translation * rotation *  scale;
-			renderables.push_back(tri);
-		}
-	}
+	// RenderObject monkey;
+	// monkey.mesh = get_mesh("monkey");
+	// monkey.material = get_material("default_mesh");
+	// monkey.transform_matrix = glm::translate(glm::mat4{1.0f}, glm::vec3(-5.0f, 0.0f, 0.0f));
+	// // Add monkey to renderables list
+	// renderables.push_back(monkey);
+
+	// RenderObject koenigsegg;
+	// koenigsegg.mesh = get_mesh("koenigsegg");
+	// koenigsegg.material = get_material("default_mesh");
+	// koenigsegg.transform_matrix = glm::translate(glm::mat4{1.0f}, glm::vec3(5.0f, 0.0f, 0.0f)) * glm::scale(glm::vec3{0.3});
+	// renderables.push_back(koenigsegg);
+	// // Add several triangles using a loop
+	// for (int x = -20; x <= 20; x++) {
+	// 	for (int y = -20; y <= 20; y++) {
+	// 		RenderObject tri;
+	// 		tri.mesh = get_mesh("triangle");
+	// 		tri.material = get_material("default_mesh");
+	// 		glm::mat4 translation = glm::translate(glm::mat4{ 1.0 }, glm::vec3(x, -10.0f, y));
+	// 		glm::mat4 rotation = glm::rotate(glm::mat4{1.0f}, glm::radians(90.0f), glm::vec3(1.0f,0.0f,0.0f));
+	// 		glm::mat4 scale = glm::scale(glm::mat4{ 1.0 }, glm::vec3(0.4, 0.4, 0.4));
+	// 		tri.transform_matrix = translation * rotation *  scale;
+	// 		renderables.push_back(tri);
+	// 	}
+	// }
+	RenderObject map;
+	map.mesh = get_mesh("lost empire");
+	map.material = get_material("textured_mesh");
+	map.transform_matrix = glm::translate(glm::vec3{ 5,-10,0 });
+	renderables.push_back(map);
+
+	// Create sampler
+	VkSamplerCreateInfo si = vkinit::sampler_create_info(VK_FILTER_NEAREST);
+	VkSampler blocky_sampler;
+	VK_CHECK(vkCreateSampler(device, &si, nullptr, &blocky_sampler));
+
+	main_deletion_queue.push_function([=](){
+		vkDestroySampler(device, blocky_sampler, nullptr);
+	});
+
+	Material* textured_material = get_material("textured_mesh");
+	VkDescriptorSetAllocateInfo ai = {};
+	ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	ai.pNext = nullptr;
+	ai.descriptorSetCount = 1;
+	ai.descriptorPool = descriptor_pool;
+	ai.pSetLayouts = &single_texture_set_layout;
+	VK_CHECK(vkAllocateDescriptorSets(device, &ai, &textured_material->texture_set));
+	// Write to the descriptor set so it points to the texture
+	VkDescriptorImageInfo image_buffer_info;
+	image_buffer_info.sampler = blocky_sampler;
+	image_buffer_info.imageView = loaded_textures["empire_diffuse"].image_view;
+	image_buffer_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+	VkWriteDescriptorSet texture1 = vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, textured_material->texture_set, &image_buffer_info, 0);
+	vkUpdateDescriptorSets(device, 1, &texture1, 0, nullptr);
+
 	// Will sort here when the scene gets complex and it will actually make a difference
 }
 // Renders each object in the RenderObject list. This is actually a pretty decent system. The renderables list can be sorted
@@ -690,8 +783,8 @@ void VulkanEngine::init_scene() {
 void VulkanEngine::draw_objects(VkCommandBuffer cmd, RenderObject* first, int count) {
 	
 	glm::vec3 camPos = {0.0f, 6.0f, 10.0f}; // camera position
-	glm::mat4 view = glm::lookAt(camPos / zoom, glm::vec3{0,0,0}, up);
-	glm::vec3 lookAt = glm::vec3(0,0,0) - camPos;
+	glm::mat4 view = glm::lookAt(camPos / zoom, glm::vec3{0,6,0}, up);
+	glm::vec3 lookAt = glm::vec3(0,10.0f,0) - camPos;
 	glm::vec3 right = glm::cross(lookAt,up);
 	glm::vec3 up = glm::cross(right, lookAt);
 	glm::mat4 rotation_hor = glm::rotate(glm::radians(rotate_hor += rotate_vel_hor), up);
@@ -743,6 +836,10 @@ void VulkanEngine::draw_objects(VkCommandBuffer cmd, RenderObject* first, int co
 			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipeline_layout, 0, 1, &get_current_frame().global_descriptor, 1, &uniform_offset);
 			// Bind object data descriptor
 			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipeline_layout, 1, 1, &get_current_frame().object_descriptor, 0, nullptr);
+			if (object.material->texture_set != VK_NULL_HANDLE) {
+				// Bind texture descriptor
+				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipeline_layout, 2, 1, &object.material->texture_set, 0, nullptr);
+			}
 		}
 		glm::mat4 model = rotation_hor * rotation_ver * object.transform_matrix;
 
