@@ -14,17 +14,20 @@
 #include "vk_mem_alloc.h"
 
 #include <fstream>
-#define VK_CHECK(x)														\
-	do {                                            			        \
-		VkResult err = x;												\
-		if (err) {														\
-			std::cout << "Detected Vulkan Error: " << err << std::endl;	\
-			abort();													\
-		}																\
-	} while (0)															\
+#include <thread>
+#include <chrono>
+
+VulkanEngine* loaded_engine = nullptr;
+
+VulkanEngine& VulkanEngine::Get() {
+	return *loaded_engine;
+}
 
 /* This is the main class that will handle all of the engine functionality. Most of the tutorial code will go here */
 void VulkanEngine::init() {
+	assert(loaded_engine == nullptr); // Ensures only one initialization is allowed in the application
+	loaded_engine = this;
+
 	// Initializes SDL. SDL_INIT_VIDEO enables the SDL video subsystems (windows, events, etc)
 	SDL_Init(SDL_INIT_VIDEO);
 	// Window flags for use in SDL_CreateWindow
@@ -714,6 +717,8 @@ void VulkanEngine::cleanup() {
 		vkb::destroy_debug_utils_messenger(instance, debug_messenger);
 		vkDestroyInstance(instance, nullptr);
 		SDL_DestroyWindow(window);
+		isInitialized = false;
+		loaded_engine = nullptr;
 	}
 }
 // Add objects to the scene
@@ -781,14 +786,13 @@ void VulkanEngine::init_scene() {
 // to minimize how many pipeline bindings are needed. Rendering the same object many times with different push constants is pretty fast,
 // since push constants are accessable by both CPU and GPU memory and don't have to be sent or re-bound.
 void VulkanEngine::draw_objects(VkCommandBuffer cmd, RenderObject* first, int count) {
-	
+	float zoom = 1.0f;
+	glm::vec3 up = {0.0f, 1.0f, 0.0f};
 	glm::vec3 camPos = {0.0f, 6.0f, 10.0f}; // camera position
 	glm::mat4 view = glm::lookAt(camPos / zoom, glm::vec3{0,6,0}, up);
 	glm::vec3 lookAt = glm::vec3(0,10.0f,0) - camPos;
 	glm::vec3 right = glm::cross(lookAt,up);
-	glm::vec3 up = glm::cross(right, lookAt);
-	glm::mat4 rotation_hor = glm::rotate(glm::radians(rotate_hor += rotate_vel_hor), up);
-	glm::mat4 rotation_ver = glm::rotate(glm::radians(rotate_ver += rotate_vel_ver), right);
+	up = glm::cross(right, lookAt);
 	// glm::mat4 view = glm::translate(glm::mat4(1.0f), camPos);
 	// Camera projection matrix
 	glm::mat4 projection = glm::perspective(glm::radians(70.0f), (float)windowExtent.width/(float)windowExtent.height, 0.1f, 200.0f);
@@ -841,7 +845,7 @@ void VulkanEngine::draw_objects(VkCommandBuffer cmd, RenderObject* first, int co
 				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipeline_layout, 2, 1, &object.material->texture_set, 0, nullptr);
 			}
 		}
-		glm::mat4 model = rotation_hor * rotation_ver * object.transform_matrix;
+		glm::mat4 model = object.transform_matrix;
 
 		MeshPushConstants constants;
 		constants.render_matrix = model;
@@ -938,23 +942,31 @@ void VulkanEngine::run() {
 				 bQuit = true;
 				 std::cout << "Window Closed" << std::endl;
 				 break;
-			 case SDL_KEYDOWN:
+			case SDL_WINDOWEVENT:
+				switch (e.window.event) {
+				case SDL_WINDOWEVENT_MINIMIZED:
+					stop_rendering = true;
+				case SDL_WINDOWEVENT_RESTORED:
+					stop_rendering = false;
+				}
+				break;
+			case SDL_KEYDOWN:
 				switch (e.key.keysym.sym){
 				case SDLK_SPACE:
 					selectedShader += 1;
 					if (selectedShader > 1) selectedShader = 0;
 					break;
 				case SDLK_w:
-					rotate_vel_ver = rotate_speed;
+				
 					break;
 				case SDLK_s:
-					rotate_vel_ver = -rotate_speed;
+				
 					break;
 				case SDLK_a:
-					rotate_vel_hor = -rotate_speed;
+				
 					break;
 				case SDLK_d:
-					rotate_vel_hor = rotate_speed;
+				
 					break;
 				default:
 					break;
@@ -967,20 +979,12 @@ void VulkanEngine::run() {
 					if (selectedShader > 1) selectedShader = 0;
 					break;
 				case SDLK_w:
-					if (rotate_vel_ver > 0)
-						rotate_vel_ver = 0.0f;
 					break;
 				case SDLK_s:
-					if (rotate_vel_ver < 0)
-						rotate_vel_ver = 0.0f;
 					break;
 				case SDLK_a:
-					if (rotate_vel_hor < 0)
-						rotate_vel_hor = 0.0f;
 					break;
 				case SDLK_d:
-					if (rotate_vel_hor > 0)
-						rotate_vel_hor = 0.0f;
 					break;
 				default:
 					break;
@@ -989,6 +993,11 @@ void VulkanEngine::run() {
 			default:
 				break;
 			}
+		}
+
+		if (stop_rendering) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+			continue;
 		}
 
 		draw();

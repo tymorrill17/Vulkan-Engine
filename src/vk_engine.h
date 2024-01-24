@@ -15,6 +15,8 @@
 #include <glm.hpp>
 #include <gtx/transform.hpp>
 
+constexpr bool enable_validation_layers = true;
+
 struct DeletionQueue {
 	std::deque<std::function<void()>> deletors;
 
@@ -93,8 +95,9 @@ constexpr unsigned int FRAME_OVERLAP = 2;
 
 class VulkanEngine {
 public:
-	bool isInitialized{ false };
+	bool isInitialized{false};
 	int frameNumber {0};
+	bool stop_rendering{false};
 	// Dimensions of the window extent
 	VkExtent2D windowExtent{ 1920 , 1080 };
 	struct SDL_Window* window{ nullptr };
@@ -145,18 +148,11 @@ public:
 	// Texture descriptor set layout
 	VkDescriptorSetLayout single_texture_set_layout;
 
-
 	int selectedShader{0}; // 0 -> red triangle, 1 -> colored triangle
 
-	float zoom = 1.0f;
-	float move_speed = 1.0f;
-	float rotate_hor = 0.0f;
-	float rotate_ver = 0.0f;
-	float rotate_vel_hor = 0.0f;
-	float rotate_vel_ver = 0.0f;
-	float rotate_speed = 0.5f;
-	glm::vec3 up = {0.0f, 1.0f, 0.0f};
 	// std::unordered_map<SDL_Keycode, bool> keyboard; // Will this work to keep track of the keyboard since SDL_Keycode is enumerated??
+
+	static VulkanEngine& Get();
 
 	// :::::::::::::::::::::::::: Main Functions ::::::::::::::::::::::::::
 	void init(); // Initializes engine
