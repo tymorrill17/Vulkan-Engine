@@ -51,8 +51,8 @@ void VulkanEngine::init() {
 
 	init_swapchain();
 	init_commands();
-	init_default_renderpass();
-	init_framebuffers();
+	// init_default_renderpass();
+	// init_framebuffers();
 	init_sync();
 	init_descriptors();
 	init_pipelines();
@@ -69,7 +69,7 @@ void VulkanEngine::init_vulkan() {
 	vkb::InstanceBuilder instance_builder;
 	// To configure the instance, call desired member functions before .build()
 	auto instance_builder_return = instance_builder.set_app_name("Vulkan App")
-		.request_validation_layers(true) // 
+		.request_validation_layers(enable_validation_layers) // 
 		.use_default_debug_messenger()
 		.require_api_version(1,3,0)
 		.build();
@@ -82,12 +82,25 @@ void VulkanEngine::init_vulkan() {
 	vkb::Instance vkb_instance = instance_builder_return.value();
 	instance = vkb_instance.instance; // Store the instance
 	debug_messenger = vkb_instance.debug_messenger; // Store debug messenger
+
 	// Get the surface of the window created with SDL
 	SDL_bool err = SDL_Vulkan_CreateSurface(window, instance, &surface);
 	if (!err) {std::cout << "Error obtaining the surface from the SDL window!" << std::endl;}
+
+	// Enable Vulkan 1.3 features
+	VkPhysicalDeviceVulkan13Features features13{};
+	features13.dynamicRendering = true; // Allows us to skip renderpasses and framebuffers
+	features13.synchronization2 = true; // Upgraded syncronization functions
+	// Enable Vulkan 1.2 features
+	VkPhysicalDeviceVulkan12Features features12{};
+	features12.bufferDeviceAddress = true; // Allows use of GPU pointers without binding buffers
+	features12.descriptorIndexing = true; // Allows use of bindless textures
 	// Obtain and select physical devices
 	vkb::PhysicalDeviceSelector phys_device_selector(vkb_instance); // constructs phys. device selector with a vkb instance
 	auto phys_device_selector_return = phys_device_selector
+		.set_minimum_version(1,3)
+		.set_required_features_12(features12)
+		.set_required_features_13(features13)
 		.set_surface(surface)
 		.select();
 	if (!phys_device_selector_return) { // Verify physical device was selected
@@ -120,10 +133,17 @@ void VulkanEngine::init_vulkan() {
 // Initialize swapchain structures
 void VulkanEngine::init_swapchain() {
 	vkb::SwapchainBuilder swapchain_builder(chosenGPU,device,surface);
+
+	swapchain_image_format = VK_FORMAT_B8G8R8A8_UNORM;
+	// VkFormat swapchain_image_format = VK_FORMAT_R8G8B8A8_UNORM;
+	VkColorSpaceKHR swapchain_color_space = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+
 	auto swapchain_builder_return = swapchain_builder
-		.use_default_format_selection()
+		// .use_default_format_selection()
+		.set_desired_format(VkSurfaceFormatKHR{.format = swapchain_image_format, .colorSpace = swapchain_color_space})
 		.set_desired_present_mode(VK_PRESENT_MODE_MAILBOX_KHR)
 		.set_desired_extent(windowExtent.width,windowExtent.height)
+		.add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
 		.build();
 	if (!swapchain_builder_return) { // Verify swap chain was built
 		std::cerr << "Failed to build swapchain. Error: " << swapchain_builder_return.error().message() << std::endl;
@@ -134,7 +154,7 @@ void VulkanEngine::init_swapchain() {
 	swapchain = vkb_swapchain.swapchain;
 	swapchain_images = vkb_swapchain.get_images().value();
 	swapchain_image_views = vkb_swapchain.get_image_views().value();
-	swapchain_image_format = vkb_swapchain.image_format;
+	// swapchain_image_format = vkb_swapchain.image_format;
 	// std::cout << "Number of swapchain images: " << swapchain_images.size() << std::endl;
 	// Depth image will match window extent
 	VkExtent3D depthimage_extent = {
@@ -158,6 +178,9 @@ void VulkanEngine::init_swapchain() {
 		vkDestroyImageView(device, depth_image_view, nullptr);
 		vmaDestroyImage(allocator, depth_image.image, depth_image.allocation);
 		vkDestroySwapchainKHR(device, swapchain, nullptr);
+		for (int i = 0; i < swapchain_image_views.size(); i++) {
+			vkDestroyImageView(device, swapchain_image_views[i], nullptr);
+		}
 	});
 }
 // Initialize command pool and command buffers
@@ -185,97 +208,97 @@ FrameData& VulkanEngine::get_current_frame() {
 	return frames[frameNumber % FRAME_OVERLAP];
 }
 // Initialize a default renderpass
-void VulkanEngine::init_default_renderpass() {
-	// Color attachment is the description of the image we will be writing with rendering commands
-	VkAttachmentDescription color_attachment={};
-	color_attachment.format = swapchain_image_format; // renderpass will have image format needed by the swapchain
-	color_attachment.samples = VK_SAMPLE_COUNT_1_BIT; // MSAA sample count
-	color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // Clear when this attachment is loaded
-	color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // Store attachment when renderpass ends
-	color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // Don't care about stencils
-	color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // Don't know or care about the starting layout of the attachment
-	color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // After the renderpass ends, the image has to be in a layout ready to display
+// void VulkanEngine::init_default_renderpass() {
+// 	// Color attachment is the description of the image we will be writing with rendering commands
+// 	VkAttachmentDescription color_attachment={};
+// 	color_attachment.format = swapchain_image_format; // renderpass will have image format needed by the swapchain
+// 	color_attachment.samples = VK_SAMPLE_COUNT_1_BIT; // MSAA sample count
+// 	color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // Clear when this attachment is loaded
+// 	color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // Store attachment when renderpass ends
+// 	color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // Don't care about stencils
+// 	color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+// 	color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // Don't know or care about the starting layout of the attachment
+// 	color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // After the renderpass ends, the image has to be in a layout ready to display
 
-	// Now the main image target is defined, so create a subpass that will render to it.
-	VkAttachmentReference color_attachment_ref={};
-	color_attachment_ref.attachment = 0; // Attachment number will index into the pAttachments array in the renderpass
-	color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+// 	// Now the main image target is defined, so create a subpass that will render to it.
+// 	VkAttachmentReference color_attachment_ref={};
+// 	color_attachment_ref.attachment = 0; // Attachment number will index into the pAttachments array in the renderpass
+// 	color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-	// Depth attachment creation
-	VkAttachmentDescription depth_attachment={};
-	depth_attachment.flags = 0;
-	depth_attachment.format = depth_format;
-	depth_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-	depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depth_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depth_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depth_attachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+// 	// Depth attachment creation
+// 	VkAttachmentDescription depth_attachment={};
+// 	depth_attachment.flags = 0;
+// 	depth_attachment.format = depth_format;
+// 	depth_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+// 	depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+//     depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+//     depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+//     depth_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+//     depth_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+//     depth_attachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-	VkAttachmentReference depth_attachment_ref = {};
-    depth_attachment_ref.attachment = 1;
-    depth_attachment_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+// 	VkAttachmentReference depth_attachment_ref = {};
+//     depth_attachment_ref.attachment = 1;
+//     depth_attachment_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-	// Minimum 1 subpass required
-	VkSubpassDescription subpass={};
-	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpass.colorAttachmentCount = 1;
-	subpass.pColorAttachments = &color_attachment_ref;
-	subpass.pDepthStencilAttachment = &depth_attachment_ref;
+// 	// Minimum 1 subpass required
+// 	VkSubpassDescription subpass={};
+// 	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+// 	subpass.colorAttachmentCount = 1;
+// 	subpass.pColorAttachments = &color_attachment_ref;
+// 	subpass.pDepthStencilAttachment = &depth_attachment_ref;
 
-	VkAttachmentDescription attachments[2] = {color_attachment, depth_attachment};
+// 	VkAttachmentDescription attachments[2] = {color_attachment, depth_attachment};
 
-	VkSubpassDependency dependency = {};
-	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-	dependency.dstSubpass = 0;
-	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.srcAccessMask = 0;
-	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	// TODO: Understand these dependencies more
-	VkSubpassDependency depth_dependency = {};
-	depth_dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-	depth_dependency.dstSubpass = 0;
-	depth_dependency.srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-	depth_dependency.srcAccessMask = 0;
-	depth_dependency.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-	depth_dependency.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+// 	VkSubpassDependency dependency = {};
+// 	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+// 	dependency.dstSubpass = 0;
+// 	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+// 	dependency.srcAccessMask = 0;
+// 	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+// 	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+// 	// TODO: Understand these dependencies more
+// 	VkSubpassDependency depth_dependency = {};
+// 	depth_dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+// 	depth_dependency.dstSubpass = 0;
+// 	depth_dependency.srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+// 	depth_dependency.srcAccessMask = 0;
+// 	depth_dependency.dstStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+// 	depth_dependency.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
-	VkSubpassDependency dependencies[2] = {dependency, depth_dependency};
+// 	VkSubpassDependency dependencies[2] = {dependency, depth_dependency};
 
-	// Now the attachments and subpass are done, we can create the main pass
-	VkRenderPassCreateInfo render_pass_info={};
-	render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	render_pass_info.attachmentCount = 2; // Connect color and depth attachments to render pass
-	render_pass_info.pAttachments = &attachments[0];
-	render_pass_info.dependencyCount = 2;
-	render_pass_info.pDependencies = &dependencies[0];
-	render_pass_info.subpassCount = 1; // Connect subpass
-	render_pass_info.pSubpasses = &subpass;
-	VK_CHECK(vkCreateRenderPass(device, &render_pass_info, nullptr, &render_pass));
-	main_deletion_queue.push_function([=](){vkDestroyRenderPass(device, render_pass, nullptr);});
-	std::cout << "Finished initializing renderpass" << std::endl;
-}
+// 	// Now the attachments and subpass are done, we can create the main pass
+// 	VkRenderPassCreateInfo render_pass_info={};
+// 	render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+// 	render_pass_info.attachmentCount = 2; // Connect color and depth attachments to render pass
+// 	render_pass_info.pAttachments = &attachments[0];
+// 	render_pass_info.dependencyCount = 2;
+// 	render_pass_info.pDependencies = &dependencies[0];
+// 	render_pass_info.subpassCount = 1; // Connect subpass
+// 	render_pass_info.pSubpasses = &subpass;
+// 	VK_CHECK(vkCreateRenderPass(device, &render_pass_info, nullptr, &render_pass));
+// 	main_deletion_queue.push_function([=](){vkDestroyRenderPass(device, render_pass, nullptr);});
+// 	std::cout << "Finished initializing renderpass" << std::endl;
+// }
 // Initialize the framebuffers
-void VulkanEngine::init_framebuffers() {
-	VkFramebufferCreateInfo framebuffer_info = vkinit::frame_buffer_create_info(render_pass,windowExtent,1,1);
-	const uint32_t swapchain_imagecount = swapchain_images.size(); // We need a framebuffer for each swapchain image
-	framebuffers = std::vector<VkFramebuffer>(swapchain_imagecount);
-	for (int i=0; i < swapchain_imagecount; i++) {
-		VkImageView attachments[2];
-		attachments[0] = swapchain_image_views[i];
-		attachments[1] = depth_image_view;
-		framebuffer_info.pAttachments = attachments;
-		framebuffer_info.attachmentCount = 2;
-		VK_CHECK(vkCreateFramebuffer(device, &framebuffer_info, nullptr, &framebuffers[i]));
-		main_deletion_queue.push_function([=]() {
-			vkDestroyFramebuffer(device, framebuffers[i], nullptr);
-			vkDestroyImageView(device, swapchain_image_views[i], nullptr);
-    	});
-	}
-}
+// void VulkanEngine::init_framebuffers() {
+// 	VkFramebufferCreateInfo framebuffer_info = vkinit::frame_buffer_create_info(render_pass,windowExtent,1,1);
+// 	const uint32_t swapchain_imagecount = swapchain_images.size(); // We need a framebuffer for each swapchain image
+// 	framebuffers = std::vector<VkFramebuffer>(swapchain_imagecount);
+// 	for (int i=0; i < swapchain_imagecount; i++) {
+// 		VkImageView attachments[2];
+// 		attachments[0] = swapchain_image_views[i];
+// 		attachments[1] = depth_image_view;
+// 		framebuffer_info.pAttachments = attachments;
+// 		framebuffer_info.attachmentCount = 2;
+// 		VK_CHECK(vkCreateFramebuffer(device, &framebuffer_info, nullptr, &framebuffers[i]));
+// 		main_deletion_queue.push_function([=]() {
+// 			vkDestroyFramebuffer(device, framebuffers[i], nullptr);
+// 			vkDestroyImageView(device, swapchain_image_views[i], nullptr);
+//     	});
+// 	}
+// }
 void VulkanEngine::init_sync() {
 	VkFenceCreateInfo fence_info = vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
 	VkSemaphoreCreateInfo semaphore_info = vkinit::semaphore_create_info();
@@ -345,15 +368,6 @@ void VulkanEngine::init_pipelines() {
 	pipeline_builder.vertex_input_info = vkinit::vertex_input_state_create_info();
 	// Input assembly is the configuration for drawing triangle lists, strips, or points
 	pipeline_builder.input_assembly = vkinit::input_assembly_state_create_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-	// Build viewport and scissor from the swapchain extents
-	pipeline_builder.viewport.x = 0.0f;
-	pipeline_builder.viewport.y = 0.0f;
-	pipeline_builder.viewport.height = windowExtent.height;
-	pipeline_builder.viewport.width = windowExtent.width;
-	pipeline_builder.viewport.minDepth = 0.0f;
-	pipeline_builder.viewport.maxDepth = 1.0f;
-	pipeline_builder.scissor.offset = {0,0};
-	pipeline_builder.scissor.extent = windowExtent;
 	// Configure the rasterizer to draw filled triangles
 	pipeline_builder.rasterizer = vkinit::rasterization_state_create_info(VK_POLYGON_MODE_FILL);
 	// Not using multisampling righ now
@@ -375,9 +389,14 @@ void VulkanEngine::init_pipelines() {
 	pipeline_builder.shader_stages.push_back(vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, meshVertShader));
 	pipeline_builder.shader_stages.push_back(vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT, triangleFragShader));
 
+	VkPipelineRenderingCreateInfo rendering_info{.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+	rendering_info.colorAttachmentCount = 1;
+	rendering_info.pColorAttachmentFormats = &swapchain_image_format;
+	rendering_info.depthAttachmentFormat = depth_format;
+	pipeline_builder.rendering_info = rendering_info;
 
 	// Build the mesh pipeline
-	mesh_pipeline = pipeline_builder.build_pipeline(device, render_pass);
+	mesh_pipeline = pipeline_builder.build_pipeline(device, this);
 	create_material(mesh_pipeline, mesh_pipeline_layout, "default_mesh");
 
 	// ::::::::::::::::::::::::: Building Textured Drawing Pipeline :::::::::::::::::::::::::
@@ -395,7 +414,7 @@ void VulkanEngine::init_pipelines() {
 	pipeline_builder.shader_stages.push_back(vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT, texturedMeshShader));
 	pipeline_builder.pipeline_layout = textured_pipeline_layout;
 
-	VkPipeline tex_pipeline = pipeline_builder.build_pipeline(device, render_pass);
+	VkPipeline tex_pipeline = pipeline_builder.build_pipeline(device, this);
 	create_material(tex_pipeline, textured_pipeline_layout, "textured_mesh");
 
 	// Destroy all shader modules outside of the deletion queue
@@ -573,10 +592,11 @@ void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& f
 	VK_CHECK(vkBeginCommandBuffer(cmd, &begininfo));
 	function(cmd); // Execute the function
 	VK_CHECK(vkEndCommandBuffer(cmd));
-	VkSubmitInfo submit = vkinit::submit_info(&cmd);
+	VkCommandBufferSubmitInfo cmdinf = vkinit::command_buffer_submit_info(cmd);
+	VkSubmitInfo2 submit = vkinit::submit_info(&cmdinf,nullptr, nullptr);
 	// Submit command buffer to the queue and execute
 	// Upload fence will block until graphics commands finish execution
-	VK_CHECK(vkQueueSubmit(graphics_queue, 1, &submit, upload_context.upload_fence));
+	VK_CHECK(vkQueueSubmit2(graphics_queue, 1, &submit, upload_context.upload_fence));
 	vkWaitForFences(device, 1, &upload_context.upload_fence, true, 9999999999);
 	vkResetFences(device, 1, &upload_context.upload_fence);
 	vkResetCommandPool(device, upload_context.command_pool, 0); // Reset the command buffers inside the cmd pool
@@ -820,7 +840,7 @@ void VulkanEngine::draw_objects(VkCommandBuffer cmd, RenderObject* first, int co
 
 	void* object_data;
 	vmaMapMemory(allocator, get_current_frame().object_buffer.allocation, &object_data);
-	GPUObjectData* objectSSBO = (GPUObjectData*)object_data; // Case the void* pointer to a complex type pointer and we can insert into it normally
+	GPUObjectData* objectSSBO = (GPUObjectData*)object_data; // Cast the void* pointer to a complex type pointer and we can insert into it normally
 	for (int i = 0; i < count; i++) {
 		RenderObject& object = first[i];
 		objectSSBO[i].modelMatrix = object.transform_matrix;
@@ -834,6 +854,22 @@ void VulkanEngine::draw_objects(VkCommandBuffer cmd, RenderObject* first, int co
 		// Only bind a new pipeline if the new material is different from the last one
 		if (object.material != lastmat) {
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, object.material->pipeline);
+
+			// Set dynamic viewport and scissor 
+			VkViewport viewport{};
+			viewport.x = 0.0f;
+			viewport.y = 0.0f;
+			viewport.height = windowExtent.height;
+			viewport.width = windowExtent.width;
+			viewport.minDepth = 0.0f;
+			viewport.maxDepth = 1.0f;
+			vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+			VkRect2D scissor{};
+			scissor.offset = {0,0};
+			scissor.extent = windowExtent;
+			vkCmdSetScissor(cmd, 0, 1, &scissor);
+
 			lastmat = object.material;
 			uint32_t uniform_offset = pad_uniform_buffer_size(sizeof(GPUSceneData)) * frameIndex;
 			// Bind descriptor sets when changing the pipeline
@@ -871,50 +907,83 @@ void VulkanEngine::draw() {
 	// Request image from the swapchain
 	uint32_t swapchain_image_index;
 	VK_CHECK(vkAcquireNextImageKHR(device, swapchain, 1000000000, get_current_frame().present_semaphore, nullptr, &swapchain_image_index));
-	// If we get here, we can safely reset the command buffer
-	VK_CHECK(vkResetCommandBuffer(get_current_frame().command_buffer, 0));
-	VkCommandBuffer cmd = get_current_frame().command_buffer; // renaming for brevity
+
+	VkCommandBuffer cmd = get_current_frame().command_buffer; // Get the next command buffer
+	VK_CHECK(vkResetCommandBuffer(cmd, 0)); // Now reset it
 	// Begin command buffer recording
-	VkCommandBufferBeginInfo cmd_begininfo={};
-	cmd_begininfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	cmd_begininfo.pNext = nullptr;
-	cmd_begininfo.pInheritanceInfo = nullptr;
-	cmd_begininfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	VkCommandBufferBeginInfo cmd_begininfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmd_begininfo));
+
+	// Transition the swapchain image to a writable format
+	vkutil::transition_image(cmd, swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 	VkClearValue clear; // Color clear
 	// float flash = abs(sin(frameNumber/120.0f));
 	clear.color = {{0.0f, 0.0f, 0.0f, 0.0f}};
-	VkClearValue depth_clear; // Depth clear
+	VkClearValue depth_clear{}; // Depth clear
 	depth_clear.depthStencil.depth = 1.0f;
 	VkClearValue clearvalues[2] = {clear, depth_clear};
 
-	// Start the main renderpass
-	VkRenderPassBeginInfo rpinfo=vkinit::renderpass_begin_info(render_pass, windowExtent, framebuffers[swapchain_image_index]);
-	rpinfo.clearValueCount = 2;
-	rpinfo.pClearValues = &clearvalues[0];
-	vkCmdBeginRenderPass(cmd, &rpinfo, VK_SUBPASS_CONTENTS_INLINE);
+	// Subresource Range specifies properties like mip levels and layers for an image.
+	VkImageSubresourceRange clear_range = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
+	vkCmdClearColorImage(cmd, swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_GENERAL, &clear.color, 1, &clear_range);
 
+	// // Start the main renderpass
+	// VkRenderPassBeginInfo rpinfo=vkinit::renderpass_begin_info(render_pass, windowExtent, framebuffers[swapchain_image_index]);
+	// rpinfo.clearValueCount = 2;
+	// rpinfo.pClearValues = &clearvalues[0];
+	// vkCmdBeginRenderPass(cmd, &rpinfo, VK_SUBPASS_CONTENTS_INLINE);
 	
+	// Since we no longer have a renderpass with color and depth attachments in it, we need to specify them here.
+	VkRenderingAttachmentInfoKHR color_attachment_info{
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
+		.imageView = swapchain_image_views[swapchain_image_index],
+		.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.clearValue = clear,
+	};
+
+	VkRenderingAttachmentInfoKHR depth_attachment_info{
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
+		.imageView = depth_image_view,
+		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL_KHR,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.clearValue = depth_clear,
+	};
+
+	// Now fill the VkRenderingInfoKHR struct with the attachment info.
+	// The VkRenderingInfoKHR struct contains information that used to be located in the renderpass and framebuffers.
+	VkRenderingInfoKHR render_info = vkinit::rendering_info(windowExtent, 1, 1);
+	render_info.pColorAttachments = &color_attachment_info;
+	render_info.pDepthAttachment = &depth_attachment_info;
+
+	// The renderpass used to automatically transition image layouts, but with dynamic rendering we need to do it manually.
+	vkutil::transition_image(cmd, depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	vkutil::transition_image(cmd, swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	
+	vkCmdBeginRendering(cmd, &render_info); // Analogous to BeginRenderpass
+
 	// RENDER HERE
 	draw_objects(cmd, renderables.data(), renderables.size());
 
 	// End render pass
-	vkCmdEndRenderPass(cmd); // Finishes rendering and transitions image to what we specified
+	vkCmdEndRendering(cmd); // EndRenderpass
+
+	// Must transition image to a present-ready format to present
+	vkutil::transition_image(cmd, swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+	// vkCmdEndRenderPass(cmd); // Finishes rendering and transitions image to what we specified
 	VK_CHECK(vkEndCommandBuffer(cmd)); // Can't add any more commands, but can now submit to the queue
+	
 	// Submit command buffer
-	VkSubmitInfo subinf={};
-	subinf.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	subinf.pNext = nullptr;
-	VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	subinf.pWaitDstStageMask = &wait_stage;
-	subinf.waitSemaphoreCount = 1; // Waiting on the present semaphore to be signaled
-	subinf.pWaitSemaphores = &get_current_frame().present_semaphore;
-	subinf.signalSemaphoreCount = 1; // Going to signal the render semaphore since we can begin rendering commands on this cmd buffer again
-	subinf.pSignalSemaphores = &get_current_frame().render_semaphore;
-	subinf.commandBufferCount = 1; // Command buffer to be submitted
-	subinf.pCommandBuffers = &cmd;
-	VK_CHECK(vkQueueSubmit(graphics_queue, 1, &subinf, get_current_frame().render_fence));
+	VkCommandBufferSubmitInfo cmdinf = vkinit::command_buffer_submit_info(cmd);
+	VkSemaphoreSubmitInfo waitinf = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, get_current_frame().present_semaphore);
+	VkSemaphoreSubmitInfo siginf = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, get_current_frame().render_semaphore);
+	VkSubmitInfo2 subinf = vkinit::submit_info(&cmdinf, &siginf, &waitinf);
+	
+	VK_CHECK(vkQueueSubmit2(graphics_queue, 1, &subinf, get_current_frame().render_fence));
 	// Present rendered image to the screen
 	VkPresentInfoKHR present_info={};
 	present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;

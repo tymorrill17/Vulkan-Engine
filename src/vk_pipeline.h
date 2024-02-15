@@ -7,13 +7,12 @@ public:
 	std::vector<VkPipelineShaderStageCreateInfo> shader_stages;
 	VkPipelineVertexInputStateCreateInfo vertex_input_info;
 	VkPipelineInputAssemblyStateCreateInfo input_assembly;
-	VkViewport viewport;
-	VkRect2D scissor;
 	VkPipelineRasterizationStateCreateInfo rasterizer;
 	VkPipelineColorBlendAttachmentState color_blend_attachment;
 	VkPipelineMultisampleStateCreateInfo multisampling;
 	VkPipelineDepthStencilStateCreateInfo depth_stencil;
 	VkPipelineLayout pipeline_layout;
+	VkPipelineRenderingCreateInfo rendering_info;
 
-	VkPipeline build_pipeline(VkDevice device, VkRenderPass pass);
+	VkPipeline build_pipeline(VkDevice device, VulkanEngine* engine);
 };

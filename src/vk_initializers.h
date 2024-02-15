@@ -8,7 +8,7 @@
 namespace vkinit {
 	VkCommandPoolCreateInfo command_pool_create_info(uint32_t queue_family_index, VkCommandPoolCreateFlags flags = 0);
 	VkCommandBufferAllocateInfo command_buffer_allocate_info(VkCommandPool pool, uint32_t count = 1, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-	VkFramebufferCreateInfo frame_buffer_create_info(VkRenderPass renderpass, VkExtent2D extent, uint32_t count = 1, uint32_t layer_count = 1);
+	// VkFramebufferCreateInfo frame_buffer_create_info(VkRenderPass renderpass, VkExtent2D extent, uint32_t attach_count = 1, uint32_t layer_count = 1);
 	VkPipelineShaderStageCreateInfo pipeline_shader_stage_create_info(VkShaderStageFlagBits stage, VkShaderModule shaderModule);
 	VkPipelineVertexInputStateCreateInfo vertex_input_state_create_info();
 	VkPipelineInputAssemblyStateCreateInfo input_assembly_state_create_info(VkPrimitiveTopology topology);
@@ -19,14 +19,18 @@ namespace vkinit {
 	VkPipelineDepthStencilStateCreateInfo depth_stencil_create_info(bool bDepthTest, bool bDepthWrite, VkCompareOp compareOp);
 	VkFenceCreateInfo fence_create_info(VkFenceCreateFlags flags = 0);
 	VkSemaphoreCreateInfo semaphore_create_info(VkSemaphoreCreateFlags flags = 0);
+	VkSemaphoreSubmitInfo semaphore_submit_info(VkPipelineStageFlags2 stage_mask, VkSemaphore semaphore);
+	VkCommandBufferSubmitInfo command_buffer_submit_info(VkCommandBuffer cmd);
 	VkImageCreateInfo image_create_info(VkFormat format, VkImageUsageFlags usage_flags, VkExtent3D extent);
 	VkImageViewCreateInfo imageview_create_info(VkFormat format, VkImage image, VkImageAspectFlags aspect_flags);
-	VkRenderPassBeginInfo renderpass_begin_info(VkRenderPass renderpass, VkExtent2D extent, VkFramebuffer framebuffer);
+	// VkRenderPassBeginInfo renderpass_begin_info(VkRenderPass renderpass, VkExtent2D extent, VkFramebuffer framebuffer);
 	VkDescriptorSetLayoutBinding descriptorset_layout_binding(VkDescriptorType type, VkShaderStageFlags flags, uint32_t binding);
 	VkWriteDescriptorSet write_descriptorset_buffer(VkDescriptorType type, VkDescriptorSet dstSet, VkDescriptorBufferInfo* bufferInfo, uint32_t binding);
 	VkCommandBufferBeginInfo command_buffer_begin_info(VkCommandBufferUsageFlags flags = 0);
-	VkSubmitInfo submit_info(VkCommandBuffer* cmd);
+	VkSubmitInfo2 submit_info(VkCommandBufferSubmitInfo* cmd, VkSemaphoreSubmitInfo* signal_semaphore_info, VkSemaphoreSubmitInfo* wait_semaphore_info);
 	VkSamplerCreateInfo sampler_create_info(VkFilter filters, VkSamplerAddressMode sampler_address_mode = VK_SAMPLER_ADDRESS_MODE_REPEAT);
 	VkWriteDescriptorSet write_descriptor_image(VkDescriptorType type, VkDescriptorSet dst_set, VkDescriptorImageInfo* image_info, uint32_t binding);
+	VkImageSubresourceRange image_subresource_range(VkImageAspectFlags aspect_mask);
+	VkRenderingInfoKHR rendering_info(VkExtent2D extent, uint32_t color_attach_count = 1, uint32_t layer_count = 1);
 }
 

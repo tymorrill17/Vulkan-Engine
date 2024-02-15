@@ -19,17 +19,17 @@ VkCommandBufferAllocateInfo vkinit::command_buffer_allocate_info(VkCommandPool p
     return info;
 }
 
-VkFramebufferCreateInfo vkinit::frame_buffer_create_info(VkRenderPass renderpass, VkExtent2D extent, uint32_t attach_count, uint32_t layer_count) {
-    VkFramebufferCreateInfo info={};
-    info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    info.pNext = nullptr;
-    info.renderPass = renderpass;
-    info.attachmentCount = attach_count;
-    info.width = extent.width;
-    info.height = extent.height;
-    info.layers = layer_count;
-    return info;
-}
+// VkFramebufferCreateInfo vkinit::frame_buffer_create_info(VkRenderPass renderpass, VkExtent2D extent, uint32_t attach_count, uint32_t layer_count) {
+//     VkFramebufferCreateInfo info={};
+//     info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+//     info.pNext = nullptr;
+//     info.renderPass = renderpass;
+//     info.attachmentCount = attach_count;
+//     info.width = extent.width;
+//     info.height = extent.height;
+//     info.layers = layer_count;
+//     return info;
+// }
 // Contains info for a single shader stage
 VkPipelineShaderStageCreateInfo vkinit::pipeline_shader_stage_create_info(VkShaderStageFlagBits stage, VkShaderModule shaderModule) {
     VkPipelineShaderStageCreateInfo info={};
@@ -170,17 +170,17 @@ VkPipelineDepthStencilStateCreateInfo vkinit::depth_stencil_create_info(bool bDe
     return info;
 }
 
-VkRenderPassBeginInfo vkinit::renderpass_begin_info(VkRenderPass renderpass, VkExtent2D extent, VkFramebuffer framebuffer) {
-    VkRenderPassBeginInfo info;
-    info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	info.pNext = nullptr;
-	info.renderPass = renderpass;
-	info.renderArea.extent = extent;
-	info.renderArea.offset.x = 0;
-	info.renderArea.offset.y = 0;
-	info.framebuffer = framebuffer;
-    return info;
-}
+// VkRenderPassBeginInfo vkinit::renderpass_begin_info(VkRenderPass renderpass, VkExtent2D extent, VkFramebuffer framebuffer) {
+//     VkRenderPassBeginInfo info;
+//     info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+// 	info.pNext = nullptr;
+// 	info.renderPass = renderpass;
+// 	info.renderArea.extent = extent;
+// 	info.renderArea.offset.x = 0;
+// 	info.renderArea.offset.y = 0;
+// 	info.framebuffer = framebuffer;
+//     return info;
+// }
 
 VkDescriptorSetLayoutBinding vkinit::descriptorset_layout_binding(VkDescriptorType type, VkShaderStageFlags stage_flags, uint32_t binding) {
     VkDescriptorSetLayoutBinding layout_binding={};
@@ -213,18 +213,38 @@ VkCommandBufferBeginInfo vkinit::command_buffer_begin_info(VkCommandBufferUsageF
 	return info;
 }
 
-VkSubmitInfo vkinit::submit_info(VkCommandBuffer* cmd) {
-    VkSubmitInfo info = {};
-	info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+VkSubmitInfo2 vkinit::submit_info(VkCommandBufferSubmitInfo* cmd, VkSemaphoreSubmitInfo* signal_semaphore_info, VkSemaphoreSubmitInfo* wait_semaphore_info) {
+    VkSubmitInfo2 info = {};
+	info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
 	info.pNext = nullptr;
-	info.waitSemaphoreCount = 0;
-	info.pWaitSemaphores = nullptr;
-	info.pWaitDstStageMask = nullptr;
-	info.commandBufferCount = 1;
-	info.pCommandBuffers = cmd;
-	info.signalSemaphoreCount = 0;
-	info.pSignalSemaphores = nullptr;
+	info.waitSemaphoreInfoCount = wait_semaphore_info == nullptr ? 0 : 1;
+	info.pWaitSemaphoreInfos = wait_semaphore_info;
+	info.signalSemaphoreInfoCount = signal_semaphore_info == nullptr ? 0 : 1;
+	info.pSignalSemaphoreInfos = signal_semaphore_info;
+	info.commandBufferInfoCount = 1;
+	info.pCommandBufferInfos = cmd;
 	return info;
+}
+
+VkSemaphoreSubmitInfo vkinit::semaphore_submit_info(VkPipelineStageFlags2 stage_mask, VkSemaphore semaphore) {
+    VkSemaphoreSubmitInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+    info.pNext = nullptr;
+    info.semaphore = semaphore;
+    info.stageMask = stage_mask;
+    info.deviceIndex = 0;
+    info.value = 1;
+    return info;
+}
+
+VkCommandBufferSubmitInfo vkinit::command_buffer_submit_info(VkCommandBuffer cmd) {
+    VkCommandBufferSubmitInfo info={
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+        .pNext = nullptr,
+        .commandBuffer = cmd,
+        .deviceMask = 0,
+    };
+    return info;
 }
 
 VkSamplerCreateInfo vkinit::sampler_create_info(VkFilter filters, VkSamplerAddressMode sampler_address_mode) {
@@ -249,4 +269,27 @@ VkWriteDescriptorSet vkinit::write_descriptor_image(VkDescriptorType type, VkDes
     write.descriptorType = type;
     write.pImageInfo = image_info;
     return write;
+}
+
+VkImageSubresourceRange vkinit::image_subresource_range(VkImageAspectFlags aspect_mask) {
+    VkImageSubresourceRange subrange={};
+    subrange.aspectMask = aspect_mask;
+    subrange.baseMipLevel = 0;
+    subrange.levelCount = VK_REMAINING_MIP_LEVELS;
+    subrange.baseArrayLayer = 0;
+    subrange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+    return subrange;
+}
+
+VkRenderingInfoKHR vkinit::rendering_info(VkExtent2D extent, uint32_t color_attach_count, uint32_t layer_count) {
+    VkRenderingInfoKHR info{
+        .sType=VK_STRUCTURE_TYPE_RENDERING_INFO_KHR,
+        .pNext=nullptr,
+        .layerCount=layer_count,
+        .colorAttachmentCount=color_attach_count,
+    };
+    info.renderArea.extent=extent;
+    info.renderArea.offset.x=0;
+    info.renderArea.offset.y=0;
+    return info;
 }
