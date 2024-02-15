@@ -144,6 +144,7 @@ void VulkanEngine::init_swapchain() {
 		.set_desired_present_mode(VK_PRESENT_MODE_MAILBOX_KHR)
 		.set_desired_extent(windowExtent.width,windowExtent.height)
 		.add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+		.
 		.build();
 	if (!swapchain_builder_return) { // Verify swap chain was built
 		std::cerr << "Failed to build swapchain. Error: " << swapchain_builder_return.error().message() << std::endl;
@@ -154,16 +155,41 @@ void VulkanEngine::init_swapchain() {
 	swapchain = vkb_swapchain.swapchain;
 	swapchain_images = vkb_swapchain.get_images().value();
 	swapchain_image_views = vkb_swapchain.get_image_views().value();
-	// swapchain_image_format = vkb_swapchain.image_format;
-	// std::cout << "Number of swapchain images: " << swapchain_images.size() << std::endl;
+	swapchain_extent.height = windowExtent.height;
+	swapchain_extent.width = windowExtent.width;
+	
+	// Initialize the draw image
+	VkExtent3D draw_image_extent = {
+		windowExtent.width,
+		windowExtent.height,
+		1
+	};
+	draw_image.format = VK_FORMAT_R16G16B16A16_SFLOAT; // Hardcoding the format for now.
+	draw_image.extent = draw_image_extent;
+	VkImageUsageFlags draw_image_usages{};
+	draw_image_usages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	draw_image_usages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	draw_image_usages |= VK_IMAGE_USAGE_STORAGE_BIT;
+	draw_image_usages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	VkImageCreateInfo rimginfo = vkinit::image_create_info(draw_image.format, draw_image_usages, draw_image.extent);
+	// We want to allocate the draw image from local gpu memory
+	VmaAllocationCreateInfo rimgallocinfo{};
+	rimgallocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+	rimgallocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	vmaCreateImage(allocator, &rimginfo, &rimgallocinfo, &draw_image.image, &draw_image.allocation, nullptr);
+	// Build the draw image view
+	VkImageViewCreateInfo rviewinfo = vkinit::imageview_create_info(draw_image.format, draw_image.image, VK_IMAGE_ASPECT_COLOR_BIT);
+	VK_CHECK(vkCreateImageView(device, &rviewinfo, nullptr, &draw_image.imageview));
+
 	// Depth image will match window extent
 	VkExtent3D depthimage_extent = {
 		windowExtent.width,
 		windowExtent.height,
 		1
 	};
-	depth_format = VK_FORMAT_D32_SFLOAT; // Hardcoding depth format to 32 bit float
-	VkImageCreateInfo dimage_info = vkinit::image_create_info(depth_format, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, depthimage_extent);
+	depth_image.format = VK_FORMAT_D32_SFLOAT; // Hardcoding depth format to 32 bit float
+	depth_image.extent = depthimage_extent;
+	VkImageCreateInfo dimage_info = vkinit::image_create_info(depth_image.format, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, depth_image.extent);
 	// We want to allocate the depth image from local GPU memory
 	VmaAllocationCreateInfo dimage_allocationinfo = {};
 	dimage_allocationinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
@@ -171,11 +197,13 @@ void VulkanEngine::init_swapchain() {
 	// Allocate and create the image
 	vmaCreateImage(allocator, &dimage_info, &dimage_allocationinfo, &depth_image.image, &depth_image.allocation, nullptr);
 	// Build the depth image view
-	VkImageViewCreateInfo dimageview_info=vkinit::imageview_create_info(depth_format, depth_image.image, VK_IMAGE_ASPECT_DEPTH_BIT);
-	VK_CHECK(vkCreateImageView(device, &dimageview_info, nullptr, &depth_image_view));
+	VkImageViewCreateInfo dimageview_info=vkinit::imageview_create_info(depth_image.format, depth_image.image, VK_IMAGE_ASPECT_DEPTH_BIT);
+	VK_CHECK(vkCreateImageView(device, &dimageview_info, nullptr, &depth_image.imageview));
 
 	main_deletion_queue.push_function([=](){
-		vkDestroyImageView(device, depth_image_view, nullptr);
+		vkDestroyImageView(device, draw_image.imageview, nullptr);
+		vmaDestroyImage(allocator, draw_image.image, draw_image.allocation);
+		vkDestroyImageView(device, depth_image.imageview, nullptr);
 		vmaDestroyImage(allocator, depth_image.image, depth_image.allocation);
 		vkDestroySwapchainKHR(device, swapchain, nullptr);
 		for (int i = 0; i < swapchain_image_views.size(); i++) {
@@ -392,7 +420,7 @@ void VulkanEngine::init_pipelines() {
 	VkPipelineRenderingCreateInfo rendering_info{.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
 	rendering_info.colorAttachmentCount = 1;
 	rendering_info.pColorAttachmentFormats = &swapchain_image_format;
-	rendering_info.depthAttachmentFormat = depth_format;
+	rendering_info.depthAttachmentFormat = depth_image.format;
 	pipeline_builder.rendering_info = rendering_info;
 
 	// Build the mesh pipeline
@@ -727,9 +755,10 @@ void VulkanEngine::cleanup() {
 		for (int i = 0; i < FRAME_OVERLAP; i++) {
 			vkWaitForFences(device, 1, &frames[i].render_fence, true, 1000000000);
 		}
-
+		
+		vkDeviceWaitIdle(device);
 		main_deletion_queue.flush();
-
+		
 		// These are special, so we don't add them to the deletion queue
 		vmaDestroyAllocator(allocator);
 		vkDestroyDevice(device, nullptr);
@@ -899,10 +928,18 @@ void VulkanEngine::draw_objects(VkCommandBuffer cmd, RenderObject* first, int co
 	// glm::mat4 model = glm::rotate(glm::mat4{1.0f}, glm::radians(frameNumber * 1.2f), glm::vec3(0,1,0));
 	// glm::mat4 mesh_matrix = projection * view * model; // Final mesh matrix
 }
+void VulkanEngine::draw_background(VkCommandBuffer cmd, VkClearValue* clear) {
+	clear->color = {{0.0f, 0.0f, 0.0f, 0.0f}};
+	clear->depthStencil.depth = 1.0f;
+	// Subresource Range specifies properties like mip levels and layers for an image.
+	VkImageSubresourceRange clear_range = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
+	vkCmdClearColorImage(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, &clear->color, 1, &clear_range);
+}
 // Draw to framebuffer each window
 void VulkanEngine::draw() {
 	// First, wait for the last frame to render
 	VK_CHECK(vkWaitForFences(device, 1, &get_current_frame().render_fence, true, 1000000000));
+	get_current_frame().deletion_queue.flush(); // Delete all objects from the last rendered frame.
 	VK_CHECK(vkResetFences(device, 1, &get_current_frame().render_fence));
 	// Request image from the swapchain
 	uint32_t swapchain_image_index;
@@ -911,22 +948,18 @@ void VulkanEngine::draw() {
 	VkCommandBuffer cmd = get_current_frame().command_buffer; // Get the next command buffer
 	VK_CHECK(vkResetCommandBuffer(cmd, 0)); // Now reset it
 	// Begin command buffer recording
+
+	draw_extent.height = draw_image.extent.height;
+	draw_extent.width = draw_image.extent.width;
+
 	VkCommandBufferBeginInfo cmd_begininfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmd_begininfo));
 
 	// Transition the swapchain image to a writable format
-	vkutil::transition_image(cmd, swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-	VkClearValue clear; // Color clear
-	// float flash = abs(sin(frameNumber/120.0f));
-	clear.color = {{0.0f, 0.0f, 0.0f, 0.0f}};
-	VkClearValue depth_clear{}; // Depth clear
-	depth_clear.depthStencil.depth = 1.0f;
-	VkClearValue clearvalues[2] = {clear, depth_clear};
-
-	// Subresource Range specifies properties like mip levels and layers for an image.
-	VkImageSubresourceRange clear_range = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
-	vkCmdClearColorImage(cmd, swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_GENERAL, &clear.color, 1, &clear_range);
+	VkClearValue clear;
+	draw_background(cmd, &clear);
 
 	// // Start the main renderpass
 	// VkRenderPassBeginInfo rpinfo=vkinit::renderpass_begin_info(render_pass, windowExtent, framebuffers[swapchain_image_index]);
@@ -937,7 +970,7 @@ void VulkanEngine::draw() {
 	// Since we no longer have a renderpass with color and depth attachments in it, we need to specify them here.
 	VkRenderingAttachmentInfoKHR color_attachment_info{
 		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
-		.imageView = swapchain_image_views[swapchain_image_index],
+		.imageView = draw_image.imageview,
 		.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
@@ -946,11 +979,11 @@ void VulkanEngine::draw() {
 
 	VkRenderingAttachmentInfoKHR depth_attachment_info{
 		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
-		.imageView = depth_image_view,
+		.imageView = depth_image.imageview,
 		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL_KHR,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-		.clearValue = depth_clear,
+		.clearValue = clear,
 	};
 
 	// Now fill the VkRenderingInfoKHR struct with the attachment info.
@@ -961,7 +994,7 @@ void VulkanEngine::draw() {
 
 	// The renderpass used to automatically transition image layouts, but with dynamic rendering we need to do it manually.
 	vkutil::transition_image(cmd, depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-	vkutil::transition_image(cmd, swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	
 	vkCmdBeginRendering(cmd, &render_info); // Analogous to BeginRenderpass
 
@@ -972,7 +1005,12 @@ void VulkanEngine::draw() {
 	vkCmdEndRendering(cmd); // EndRenderpass
 
 	// Must transition image to a present-ready format to present
-	vkutil::transition_image(cmd, swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+	vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	vkutil::transition_image(cmd, swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+	vkutil::copy_image_to_image(cmd, draw_image.image, draw_extent, swapchain_images[swapchain_image_index], swapchain_extent);
+
+	vkutil::transition_image(cmd, swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
 	// vkCmdEndRenderPass(cmd); // Finishes rendering and transitions image to what we specified
 	VK_CHECK(vkEndCommandBuffer(cmd)); // Can't add any more commands, but can now submit to the queue

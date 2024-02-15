@@ -17,6 +17,7 @@
 
 constexpr bool enable_validation_layers = true;
 
+// This is not a scalable approach. Should instead store pointers to various vulkan types and delete from a loop.
 struct DeletionQueue {
 	std::deque<std::function<void()>> deletors;
 
@@ -66,6 +67,7 @@ struct FrameData {
 	VkDescriptorSet global_descriptor;
 	AllocatedBuffer object_buffer; // Storage buffer
 	VkDescriptorSet object_descriptor;
+	DeletionQueue deletion_queue;
 };
 
 struct GPUSceneData {
@@ -113,6 +115,9 @@ public:
 	VkFormat swapchain_image_format; // image format expected by the window system
 	std::vector<VkImage> swapchain_images; // array of images in the swapchain
 	std::vector<VkImageView> swapchain_image_views; // array of image views for swapchain images
+	VkExtent2D swapchain_extent;
+	AllocatedImage draw_image; // Image being drawn to before being copied to the swapchain image
+	VkExtent2D draw_extent; // Extent of the draw image
 	// Commands structures
 	VkQueue graphics_queue;
 	uint32_t graphics_queue_family;
@@ -129,9 +134,7 @@ public:
 	VkPipeline mesh_pipeline;
 	// Meshes
 	// Depth Image objects
-	VkImageView depth_image_view;
 	AllocatedImage depth_image;
-	VkFormat depth_format;
 	// Render object management
 	std::vector<RenderObject> renderables; // default array of renderable objects
 	std::unordered_map<std::string,Material> materials;
@@ -194,6 +197,7 @@ private:
 
 	// :::::::::::::::::::::::::: Scene-Related Functions ::::::::::::::::::::::::::
 	void draw_objects(VkCommandBuffer cmd, RenderObject* first, int count);
+	void draw_background(VkCommandBuffer cmd, VkClearValue* clear);
 	void init_scene();
 	Material* create_material(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name); // Create materials and add them to the materials unordered_map
 	Material* get_material(const std::string& name); // Returns nullptr if not found

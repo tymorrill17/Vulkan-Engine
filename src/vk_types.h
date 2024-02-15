@@ -24,5 +24,8 @@ struct AllocatedBuffer {
 
 struct AllocatedImage {
     VkImage image;
+	VkImageView imageview;
     VmaAllocation allocation;
+	VkExtent3D extent;
+	VkFormat format;
 };
