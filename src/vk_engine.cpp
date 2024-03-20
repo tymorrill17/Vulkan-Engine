@@ -144,7 +144,6 @@ void VulkanEngine::init_swapchain() {
 		.set_desired_present_mode(VK_PRESENT_MODE_MAILBOX_KHR)
 		.set_desired_extent(windowExtent.width,windowExtent.height)
 		.add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-		.
 		.build();
 	if (!swapchain_builder_return) { // Verify swap chain was built
 		std::cerr << "Failed to build swapchain. Error: " << swapchain_builder_return.error().message() << std::endl;
@@ -419,7 +418,7 @@ void VulkanEngine::init_pipelines() {
 
 	VkPipelineRenderingCreateInfo rendering_info{.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
 	rendering_info.colorAttachmentCount = 1;
-	rendering_info.pColorAttachmentFormats = &swapchain_image_format;
+	rendering_info.pColorAttachmentFormats = &draw_image.format;
 	rendering_info.depthAttachmentFormat = depth_image.format;
 	pipeline_builder.rendering_info = rendering_info;
 
