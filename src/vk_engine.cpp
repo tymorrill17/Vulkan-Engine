@@ -1,14 +1,15 @@
 ﻿
-#include "vk_engine.h"
+#include <vk_engine.h>
+
+#include <vk_types.h>
+#include <vk_initializers.h>
+#include <vk_pipeline.h>
+#include <VkBootstrap.h>
+#include <vk_texture.h>
+#include <vk_descriptors.h>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_vulkan.h>
-
-#include "vk_types.h"
-#include "vk_initializers.h"
-#include "vk_pipeline.h"
-#include "VkBootstrap.h"
-#include "vk_texture.h"
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
@@ -199,7 +200,7 @@ void VulkanEngine::init_swapchain() {
 	VkImageViewCreateInfo dimageview_info=vkinit::imageview_create_info(depth_image.format, depth_image.image, VK_IMAGE_ASPECT_DEPTH_BIT);
 	VK_CHECK(vkCreateImageView(device, &dimageview_info, nullptr, &depth_image.imageview));
 
-	main_deletion_queue.push_function([=](){
+	main_deletion_queue.push_function([=, this](){
 		vkDestroyImageView(device, draw_image.imageview, nullptr);
 		vmaDestroyImage(allocator, draw_image.image, draw_image.allocation);
 		vkDestroyImageView(device, depth_image.imageview, nullptr);
@@ -220,12 +221,12 @@ void VulkanEngine::init_commands() {
 		VkCommandBufferAllocateInfo cmd_alloc_info = vkinit::command_buffer_allocate_info(frames[i].command_pool, 1);
 		VK_CHECK(vkAllocateCommandBuffers(device, &cmd_alloc_info, &frames[i].command_buffer));
 		// Push deletion function to the deletion queue
-		main_deletion_queue.push_function([=](){vkDestroyCommandPool(device, frames[i].command_pool, nullptr);});
+		main_deletion_queue.push_function([=, this](){vkDestroyCommandPool(device, frames[i].command_pool, nullptr);});
 	}
 	// GPU memory uplead command structures
 	VkCommandPoolCreateInfo upload_command_pool_info = vkinit::command_pool_create_info(graphics_queue_family);
 	VK_CHECK(vkCreateCommandPool(device, &upload_command_pool_info, nullptr, &upload_context.command_pool));
-	main_deletion_queue.push_function([=](){vkDestroyCommandPool(device, upload_context.command_pool, nullptr);});
+	main_deletion_queue.push_function([=, this](){vkDestroyCommandPool(device, upload_context.command_pool, nullptr);});
 	// Allocate the default command buffer for the instant commands
 	VkCommandBufferAllocateInfo cmd_allocinfo = vkinit::command_buffer_allocate_info(upload_context.command_pool, 1);
 	VK_CHECK(vkAllocateCommandBuffers(device, &cmd_allocinfo, &upload_context.command_buffer));
@@ -305,7 +306,7 @@ FrameData& VulkanEngine::get_current_frame() {
 // 	render_pass_info.subpassCount = 1; // Connect subpass
 // 	render_pass_info.pSubpasses = &subpass;
 // 	VK_CHECK(vkCreateRenderPass(device, &render_pass_info, nullptr, &render_pass));
-// 	main_deletion_queue.push_function([=](){vkDestroyRenderPass(device, render_pass, nullptr);});
+// 	main_deletion_queue.push_function([=, this](){vkDestroyRenderPass(device, render_pass, nullptr);});
 // 	std::cout << "Finished initializing renderpass" << std::endl;
 // }
 // Initialize the framebuffers
@@ -320,7 +321,7 @@ FrameData& VulkanEngine::get_current_frame() {
 // 		framebuffer_info.pAttachments = attachments;
 // 		framebuffer_info.attachmentCount = 2;
 // 		VK_CHECK(vkCreateFramebuffer(device, &framebuffer_info, nullptr, &framebuffers[i]));
-// 		main_deletion_queue.push_function([=]() {
+// 		main_deletion_queue.push_function([=, this]() {
 // 			vkDestroyFramebuffer(device, framebuffers[i], nullptr);
 // 			vkDestroyImageView(device, swapchain_image_views[i], nullptr);
 //     	});
@@ -332,7 +333,7 @@ void VulkanEngine::init_sync() {
 
 	VkFenceCreateInfo upload_fence_info = vkinit::fence_create_info();
 	VK_CHECK(vkCreateFence(device, &upload_fence_info, nullptr, &upload_context.upload_fence));
-	main_deletion_queue.push_function([=](){
+	main_deletion_queue.push_function([=, this](){
 			vkDestroyFence(device, upload_context.upload_fence, nullptr);
 		});
 
@@ -341,7 +342,7 @@ void VulkanEngine::init_sync() {
 		// Both semaphores use the same create info
 		VK_CHECK(vkCreateSemaphore(device, &semaphore_info, nullptr, &frames[i].render_semaphore));
 		VK_CHECK(vkCreateSemaphore(device, &semaphore_info, nullptr, &frames[i].present_semaphore));
-		main_deletion_queue.push_function([=](){
+		main_deletion_queue.push_function([=, this](){
 			vkDestroyFence(device, frames[i].render_fence, nullptr);
 			vkDestroySemaphore(device, frames[i].render_semaphore, nullptr);
 			vkDestroySemaphore(device, frames[i].present_semaphore, nullptr);
@@ -448,7 +449,7 @@ void VulkanEngine::init_pipelines() {
 	vkDestroyShaderModule(device, triangleFragShader, nullptr);
 	vkDestroyShaderModule(device, meshVertShader, nullptr);
 	vkDestroyShaderModule(device, texturedMeshShader, nullptr);
-	main_deletion_queue.push_function([=](){
+	main_deletion_queue.push_function([=, this](){
 		vkDestroyPipelineLayout(device, mesh_pipeline_layout, nullptr);
 		vkDestroyPipeline(device, mesh_pipeline, nullptr);
 		vkDestroyPipelineLayout(device, textured_pipeline_layout, nullptr);
@@ -533,7 +534,7 @@ void VulkanEngine::load_images() {
 	VK_CHECK(vkCreateImageView(device, &ivci, nullptr, &lost_empire.image_view));
 	loaded_textures["empire_diffuse"] = lost_empire;
 
-	main_deletion_queue.push_function([=](){
+	main_deletion_queue.push_function([=, this](){
 		vkDestroyImageView(device, lost_empire.image_view, nullptr);
 	});
 }
@@ -552,7 +553,7 @@ void VulkanEngine::upload_mesh(Mesh& mesh) {
 	// Now create the GPU-side buffer
 	mesh.vertex_buffer = create_buffer(buffer_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
 	// Buffers created, time to copy
-	immediate_submit([=](VkCommandBuffer cmd) {
+	immediate_submit([=, this](VkCommandBuffer cmd) {
 		VkBufferCopy copy;
 		copy.dstOffset = 0;
 		copy.srcOffset = 0;
@@ -560,7 +561,7 @@ void VulkanEngine::upload_mesh(Mesh& mesh) {
 		vkCmdCopyBuffer(cmd, staging_buffer.buffer, mesh.vertex_buffer.buffer, 1, &copy);
 	});
 	// Buffer copied, clean up
-	main_deletion_queue.push_function([=](){
+	main_deletion_queue.push_function([=, this](){
 		vmaDestroyBuffer(allocator, mesh.vertex_buffer.buffer, mesh.vertex_buffer.allocation);
 	});
 	vmaDestroyBuffer(allocator, staging_buffer.buffer, staging_buffer.allocation); // We can instantly destroy this to free up the CPU memory
@@ -631,63 +632,66 @@ void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& f
 // Initialize descriptor sets and related objects
 void VulkanEngine::init_descriptors() {
 	// Create a descriptor pool that will hold 10 uniform buffers (10 is arbitrary for now)
-	std::vector<VkDescriptorPoolSize> sizes = {
+	std::vector<DescriptorAllocator::PoolSizeRatio> sizes = {
 		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10},
 		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 10},
 		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 10},
 		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10} // Descriptor for combined sampler and image
 	};
-	VkDescriptorPoolCreateInfo pool_info={};
-	pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	pool_info.pNext = nullptr;
-	pool_info.flags = 0; // No flags
-	pool_info.maxSets = 10;
-	pool_info.poolSizeCount = (uint32_t)sizes.size();
-	pool_info.pPoolSizes = sizes.data();
-	vkCreateDescriptorPool(device, &pool_info, nullptr, &descriptor_pool);
+	// BEING USED FOR COMPUTE SHADER
+	std::vector<DescriptorAllocator::PoolSizeRatio> compute_sizes = {
+		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1}
+	};
 
-	// Initialize Uniform Buffer layouts
-	// Create binding for camera uniform buffer
-	VkDescriptorSetLayoutBinding camera_bind=vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 0);
-	// Create binding for scene parameter uniform buffer
-	VkDescriptorSetLayoutBinding scene_bind=vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 1);
-	VkDescriptorSetLayoutBinding uniform_bindings[] = {camera_bind, scene_bind};
-	// Create the global descriptor set layout
-	// TODO: abstract this with vkinit?
-	VkDescriptorSetLayoutCreateInfo setinfo={};
-	setinfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	setinfo.pNext = nullptr;
-	setinfo.bindingCount = 2; // Length of bindings[]
-	setinfo.flags = 0; // No flags
-	setinfo.pBindings = uniform_bindings;
-	VK_CHECK(vkCreateDescriptorSetLayout(device, &setinfo, nullptr, &global_set_layout));
+	global_descriptor_allocator.init_pool(device, 10, sizes);
+	compute_descriptor_allocator.init_pool(device, 10, compute_sizes);
+
+	// VkDescriptorPoolCreateInfo pool_info={};
+	// pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	// pool_info.pNext = nullptr;
+	// pool_info.flags = 0; // No flags
+	// pool_info.maxSets = 10;
+	// pool_info.poolSizeCount = (uint32_t)sizes.size();
+	// pool_info.pPoolSizes = sizes.data();
+	// vkCreateDescriptorPool(device, &pool_info, nullptr, &descriptor_pool);
+
+	// Initialize global descriptor set layouts
+	DescriptorLayoutBuilder builder;
+	builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT); // binding for camera uniform buffer
+	builder.add_binding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT); // binding for scene parameter uniform buffer
+	global_set_layout = builder.build(device);
+
+	builder.clear();
+	builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);
+	draw_image_descriptor_layout = builder.build(device);
 
 	// Initialize Storage Buffer layouts
-	VkDescriptorSetLayoutBinding object_bind=vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 0);
-	VkDescriptorSetLayoutCreateInfo objsetinfo={};
-	objsetinfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	objsetinfo.pNext = nullptr;
-	objsetinfo.bindingCount = 1;
-	objsetinfo.flags = 0;
-	objsetinfo.pBindings = &object_bind;
-	VK_CHECK(vkCreateDescriptorSetLayout(device, &objsetinfo, nullptr, &object_set_layout));
-
+	builder.clear();
+	builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+	object_set_layout = builder.build(device);
+	
 	// Texture descriptor set layout
-	VkDescriptorSetLayoutBinding texture_bind=vkinit::descriptorset_layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0);
-	VkDescriptorSetLayoutCreateInfo texsetinfo={};
-	texsetinfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	texsetinfo.pNext = nullptr;
-	texsetinfo.bindingCount = 1;
-	texsetinfo.flags = 0;
-	texsetinfo.pBindings = &texture_bind;
-	VK_CHECK(vkCreateDescriptorSetLayout(device, &texsetinfo, nullptr, &single_texture_set_layout));
+	builder.clear();
+	builder.add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
+	single_texture_set_layout = builder.build(device);
 
 	main_deletion_queue.push_function([&]() {
 		vkDestroyDescriptorSetLayout(device, object_set_layout, nullptr);
 		vkDestroyDescriptorSetLayout(device, global_set_layout, nullptr);
 		vkDestroyDescriptorSetLayout(device, single_texture_set_layout, nullptr);
-		vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
+		vkDestroyDescriptorSetLayout(device, draw_image_descriptor_layout, nullptr);
+		global_descriptor_allocator.destroy_pool(device);
+		compute_descriptor_allocator.destroy_pool(device);
 	});
+
+	// Allocate the descriptor set for the compute shader test render
+	draw_image_descriptor_set = compute_descriptor_allocator.allocate(device, draw_image_descriptor_layout);
+	VkDescriptorImageInfo dii{};
+	dii.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+	dii.imageView = draw_image.imageview;
+	VkWriteDescriptorSet draw_image_write = vkinit::write_descriptor_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, draw_image_descriptor_set, &dii, 0);
+	vkUpdateDescriptorSets(device, 1, &draw_image_write, 0, nullptr);
+
 	// Because of alignment, we need to increase the size of the buffer so that it fits 2 padded GPUSceneData structs
 	const size_t scene_param_buffer_size = FRAME_OVERLAP * pad_uniform_buffer_size(sizeof(GPUSceneData));
 	scene_parameter_buffer = create_buffer(scene_param_buffer_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
@@ -699,21 +703,9 @@ void VulkanEngine::init_descriptors() {
 		frames[i].object_buffer = create_buffer(sizeof(GPUObjectData) * MAX_OBJECTS, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 		// Allocate descriptor set via the descriptor pool and descriptor layout
-		VkDescriptorSetAllocateInfo allocinfo={};
-		allocinfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		allocinfo.pNext = nullptr;
-		allocinfo.descriptorPool = descriptor_pool;
-		allocinfo.descriptorSetCount = 1;
-		allocinfo.pSetLayouts = &global_set_layout;
-		VK_CHECK(vkAllocateDescriptorSets(device, &allocinfo, &frames[i].global_descriptor));
+		frames[i].global_descriptor = global_descriptor_allocator.allocate(device, global_set_layout);
 		// Object Storage Buffer Writing
-		VkDescriptorSetAllocateInfo objallocinfo={};
-		objallocinfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		objallocinfo.pNext = nullptr;
-		objallocinfo.descriptorPool = descriptor_pool;
-		objallocinfo.descriptorSetCount = 1;
-		objallocinfo.pSetLayouts = &object_set_layout;
-		VK_CHECK(vkAllocateDescriptorSets(device, &objallocinfo, &frames[i].object_descriptor));
+		frames[i].object_descriptor = global_descriptor_allocator.allocate(device, object_set_layout);
 
 		// Make the descriptor point to the camera buffer
 		VkDescriptorBufferInfo camera_info={};
@@ -808,18 +800,12 @@ void VulkanEngine::init_scene() {
 	VkSampler blocky_sampler;
 	VK_CHECK(vkCreateSampler(device, &si, nullptr, &blocky_sampler));
 
-	main_deletion_queue.push_function([=](){
+	main_deletion_queue.push_function([=, this](){
 		vkDestroySampler(device, blocky_sampler, nullptr);
 	});
 
 	Material* textured_material = get_material("textured_mesh");
-	VkDescriptorSetAllocateInfo ai = {};
-	ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	ai.pNext = nullptr;
-	ai.descriptorSetCount = 1;
-	ai.descriptorPool = descriptor_pool;
-	ai.pSetLayouts = &single_texture_set_layout;
-	VK_CHECK(vkAllocateDescriptorSets(device, &ai, &textured_material->texture_set));
+	textured_material->texture_set = global_descriptor_allocator.allocate(device, single_texture_set_layout);
 	// Write to the descriptor set so it points to the texture
 	VkDescriptorImageInfo image_buffer_info;
 	image_buffer_info.sampler = blocky_sampler;

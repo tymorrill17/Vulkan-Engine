@@ -1,9 +1,6 @@
 #pragma once
 
 #include <vk_types.h>
-#include <vector>
-#include <vec3.hpp>
-#include <vec2.hpp>
 
 struct VertexInputDescription {
     std::vector<VkVertexInputBindingDescription> bindings;

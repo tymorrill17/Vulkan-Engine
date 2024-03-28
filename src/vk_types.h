@@ -3,9 +3,27 @@
 
 #pragma once
 
+#include <vector>
+#include <memory>
+#include <optional>
+#include <string>
+#include <span>
+#include <array>
+#include <functional>
+#include <deque>
+#include <unordered_map>
+#include <iostream>
+
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 #include <vulkan/vk_enum_string_helper.h>
+
+#define GLM_ENABLE_EXPERIMENTAL
+
+#include <glm.hpp>
+#include <gtx/transform.hpp>
+#include <vec3.hpp>
+#include <vec2.hpp>
 
 #define VK_CHECK(x)																			\
 	do {                                            			    					    \

@@ -12,7 +12,9 @@ add_executable(run_engine
     vk_mesh.h
     vk_mesh.cpp
     vk_texture.h
-    vk_texture.cpp)
+    vk_texture.cpp
+    vk_descriptors.h
+    vk_descriptors.cpp)
 
 # Sets the Visual Studio debugger directory
 set_property(TARGET run_engine PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:run_engine>")

@@ -5,7 +5,7 @@ cmake_minimum_required (VERSION 3.8)
 
 project ("Vulkan-Engine")
 # Sets cmake version
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 23)
 # Obtains all of the Vulkan API compiling information
 find_package(Vulkan REQUIRED)
 # Subdirectory to handle third_party library compilation

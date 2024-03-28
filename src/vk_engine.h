@@ -3,17 +3,9 @@
 
 #pragma once
 
-#define GLM_ENABLE_EXPERIMENTAL
-
-#include "vk_types.h"
+#include <vk_types.h>
 #include <vk_mesh.h>
-#include <vector>
-#include <unordered_map>
-#include <iostream>
-#include <functional>
-#include <deque>
-#include <glm.hpp>
-#include <gtx/transform.hpp>
+#include <vk_descriptors.h>
 
 constexpr bool enable_validation_layers = true;
 
@@ -141,9 +133,15 @@ public:
 	std::unordered_map<std::string,Mesh> meshes;
 	std::unordered_map<std::string,Texture> loaded_textures;
 	// Descriptor Sets
+	DescriptorAllocator global_descriptor_allocator;
+	DescriptorAllocator compute_descriptor_allocator;
 	VkDescriptorSetLayout global_set_layout;
 	VkDescriptorSetLayout object_set_layout;
-	VkDescriptorPool descriptor_pool;
+
+	// TEMP FOR COMPUTE SHADER DESCRIPTORS
+	VkDescriptorSet draw_image_descriptor_set;
+	VkDescriptorSetLayout draw_image_descriptor_layout;
+	// VkDescriptorPool descriptor_pool;
 	GPUSceneData scene_parameters;
 	AllocatedBuffer scene_parameter_buffer;
 	// To copy data to GPU memory
