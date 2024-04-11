@@ -16,3 +16,7 @@ public:
 
 	VkPipeline build_pipeline(VkDevice device, VulkanEngine* engine);
 };
+
+namespace vkutil {
+	bool load_shader_module(const char* filepath, VkDevice device, VkShaderModule* out_shader_module);
+}

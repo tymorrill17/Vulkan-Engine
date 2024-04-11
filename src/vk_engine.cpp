@@ -350,21 +350,21 @@ void VulkanEngine::init_sync() {
 	}
 }
 // Initialize rendering pipeline structures
-void VulkanEngine::init_pipelines() {
+void VulkanEngine::init_graphics_pipelines() {
 	VkShaderModule triangleFragShader;
-	if (!load_shader_module("../shaders/default_lit.frag.spv", &triangleFragShader)) {
+	if (!vkutil::load_shader_module("../shaders/default_lit.frag.spv", device, &triangleFragShader)) {
 		std::cout << "Error building the colored mesh shader module!" << std::endl;
 	} else {
 		std::cout << "Fragment shader successfully loaded!" << std::endl;
 	}
 	VkShaderModule meshVertShader;
-	if (!load_shader_module("../shaders/tri_mesh.vert.spv", &meshVertShader)) {
+	if (!vkutil::load_shader_module("../shaders/tri_mesh.vert.spv", device, &meshVertShader)) {
 		std::cout << "Error when building the triangle mesh vertex shader module!" << std::endl;
 	} else {
 		std::cout << "Triangle mesh vertex shader successfully loaded!" << std::endl;
 	}
 	VkShaderModule texturedMeshShader;
-	if (!load_shader_module("../shaders/texture_lit.frag.spv", &texturedMeshShader)) {
+	if (!vkutil::load_shader_module("../shaders/texture_lit.frag.spv", device, &texturedMeshShader)) {
 		std::cout << "Error when building the textured fragment shader module!" << std::endl;
 	} else {
 		std::cout << "Textured fragment shader successfully loaded!" << std::endl;
@@ -456,36 +456,45 @@ void VulkanEngine::init_pipelines() {
 		vkDestroyPipeline(device, tex_pipeline, nullptr);
 	});
 }
-// Loads a shader module from a SPIR-V file. Returns false if there are errors.
-bool VulkanEngine::load_shader_module(const char* filepath, VkShaderModule* out_shader_module) {
-	// std::ios::ate -> puts stream curser at end
-	// std::ios::binary -> opens file in binary mode
-	std::ifstream file(filepath, std::ios::ate | std::ios::binary);
-	if (!file.is_open()) {
-		std::cerr << "ERROR: Shader file does not exist!" << std::endl;
-		return false;
-	}
-	// Since cursor is at the end, use it to find the size of the file, then copy the entire shader into a vector of uint32_t
-	size_t filesize = (size_t)file.tellg(); // tellg() returns the position of the cursor
-	std::vector<uint32_t> buffer(filesize / sizeof(uint32_t));
-	file.seekg(0); // move cursor to beginning
-	file.read((char*)buffer.data(), filesize); // load entire file into the buffer
-	file.close();
-	// Now we have the entire shader in the buffer and can load it to Vulkan
-	VkShaderModuleCreateInfo createinfo;
-	createinfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	createinfo.pNext = nullptr;
-	createinfo.codeSize = buffer.size() * sizeof(uint32_t); // codeSize has to be in bytes
-	createinfo.pCode = buffer.data();
-	createinfo.flags=0;
+void VulkanEngine::init_compute_pipelines() {
+	VkPipelineLayoutCreateInfo plci{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		.pNext = nullptr,
+		.setLayoutCount = 1,
+		.pSetLayouts = &draw_image_descriptor_layout
+	};
+	VK_CHECK(vkCreatePipelineLayout(device, &plci, nullptr, &gradient_pipeline_layout));
 
-	VkShaderModule shader_module;
-	if (vkCreateShaderModule(device, &createinfo, nullptr, &shader_module) != VK_SUCCESS) {
-		std::cerr << "ERROR: Something went wrong within vkCreateShaderModule()!" << std::endl;
-		return false;
+	VkShaderModule gradient_draw_shader;
+	if (!vkutil::load_shader_module("../shaders/gradient.comp.spv", device, &gradient_draw_shader)) {
+		std::cout << "Error building the gradient compute shader module!" << std::endl;
+	} else {
+		std::cout << "Compute shader successfully loaded!" << std::endl;
 	}
-	*out_shader_module = shader_module;
-	return true;
+	VkPipelineShaderStageCreateInfo pssci{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.pNext = nullptr,
+		.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+		.module = gradient_draw_shader,
+		.pName = "main"
+	};
+	VkComputePipelineCreateInfo cpci{
+		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		.pNext = nullptr,
+		.stage = pssci,
+		.layout = gradient_pipeline_layout
+	};
+	VK_CHECK(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cpci, nullptr, &gradient_pipeline));
+
+	vkDestroyShaderModule(device, gradient_draw_shader, nullptr);
+	main_deletion_queue.push_function([=, this](){
+		vkDestroyPipelineLayout(device, gradient_pipeline_layout, nullptr);
+		vkDestroyPipeline(device, gradient_pipeline, nullptr);
+	});
+}
+void VulkanEngine::init_pipelines() {
+	init_compute_pipelines();
+	init_graphics_pipelines(); 
 }
 // Loads the mesh object with vertex information
 void VulkanEngine::load_meshes() {
@@ -914,11 +923,20 @@ void VulkanEngine::draw_objects(VkCommandBuffer cmd, RenderObject* first, int co
 	// glm::mat4 mesh_matrix = projection * view * model; // Final mesh matrix
 }
 void VulkanEngine::draw_background(VkCommandBuffer cmd, VkClearValue* clear) {
-	clear->color = {{0.0f, 0.0f, 0.0f, 0.0f}};
+	// VkClearColorValue clearcolor{};
+	// float flash = abs(sin(frameNumber / 120.f));
+	// clearcolor = {{0.0f, 0.0f, 0.0f, 1.0f}};
+	// std::cout << clearcolor.float32[0] << " " << clearcolor.float32[1] << " " << clearcolor.float32[2] << " " << clearcolor.float32[3] << std::endl;
+	clear->color = {0.f, 0.f, 0.f, 1.f};
 	clear->depthStencil.depth = 1.0f;
-	// Subresource Range specifies properties like mip levels and layers for an image.
-	VkImageSubresourceRange clear_range = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
-	vkCmdClearColorImage(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, &clear->color, 1, &clear_range);
+	// // Subresource Range specifies properties like mip levels and layers for an image.
+	// VkImageSubresourceRange clear_range = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
+	// vkCmdClearColorImage(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, &clear->color, 1, &clear_range);
+
+	// Draw with compute shaders
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, gradient_pipeline);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, gradient_pipeline_layout, 0, 1, &draw_image_descriptor_set, 0, nullptr);
+	vkCmdDispatch(cmd, std::ceil(draw_extent.width / 16.0), std::ceil(draw_extent.height / 16.0), 1);
 }
 // Draw to framebuffer each window
 void VulkanEngine::draw() {
@@ -945,12 +963,6 @@ void VulkanEngine::draw() {
 
 	VkClearValue clear;
 	draw_background(cmd, &clear);
-
-	// // Start the main renderpass
-	// VkRenderPassBeginInfo rpinfo=vkinit::renderpass_begin_info(render_pass, windowExtent, framebuffers[swapchain_image_index]);
-	// rpinfo.clearValueCount = 2;
-	// rpinfo.pClearValues = &clearvalues[0];
-	// vkCmdBeginRenderPass(cmd, &rpinfo, VK_SUBPASS_CONTENTS_INLINE);
 	
 	// Since we no longer have a renderpass with color and depth attachments in it, we need to specify them here.
 	VkRenderingAttachmentInfoKHR color_attachment_info{
@@ -973,24 +985,25 @@ void VulkanEngine::draw() {
 
 	// Now fill the VkRenderingInfoKHR struct with the attachment info.
 	// The VkRenderingInfoKHR struct contains information that used to be located in the renderpass and framebuffers.
-	VkRenderingInfoKHR render_info = vkinit::rendering_info(windowExtent, 1, 1);
-	render_info.pColorAttachments = &color_attachment_info;
-	render_info.pDepthAttachment = &depth_attachment_info;
+	// VkRenderingInfoKHR render_info = vkinit::rendering_info(windowExtent, 1, 1);
+	// render_info.pColorAttachments = &color_attachment_info;
+	// render_info.pDepthAttachment = &depth_attachment_info;
 
-	// The renderpass used to automatically transition image layouts, but with dynamic rendering we need to do it manually.
-	vkutil::transition_image(cmd, depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-	vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	// // The renderpass used to automatically transition image layouts, but with dynamic rendering we need to do it manually.
+	// vkutil::transition_image(cmd, depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	// vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	
-	vkCmdBeginRendering(cmd, &render_info); // Analogous to BeginRenderpass
+	// vkCmdBeginRendering(cmd, &render_info); // Analogous to BeginRenderpass
 
-	// RENDER HERE
-	draw_objects(cmd, renderables.data(), renderables.size());
+	// // RENDER HERE
+	// // draw_objects(cmd, renderables.data(), renderables.size());
 
-	// End render pass
-	vkCmdEndRendering(cmd); // EndRenderpass
+	// // End render pass
+	// vkCmdEndRendering(cmd); // EndRenderpass
 
-	// Must transition image to a present-ready format to present
-	vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	// // Must transition image to a present-ready format to present
+	// vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 	vkutil::transition_image(cmd, swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	vkutil::copy_image_to_image(cmd, draw_image.image, draw_extent, swapchain_images[swapchain_image_index], swapchain_extent);

@@ -1,6 +1,8 @@
 #include "vk_engine.h"
 #include "vk_pipeline.h"
 
+#include <fstream>
+
 VkPipeline PipelineBuilder::build_pipeline(VkDevice device, VulkanEngine* engine) { //VkRenderPass pass) {
     // Make viewport state from stored viewport and scissor.
     VkPipelineViewportStateCreateInfo viewport_state={};
@@ -52,4 +54,36 @@ VkPipeline PipelineBuilder::build_pipeline(VkDevice device, VulkanEngine* engine
 
     VkPipeline pipeline;
     return pipeline;
+}
+
+// Loads a shader module from a SPIR-V file. Returns false if there are errors.
+bool vkutil::load_shader_module(const char* filepath, VkDevice device, VkShaderModule* out_shader_module) {
+	// std::ios::ate -> puts stream curser at end
+	// std::ios::binary -> opens file in binary mode
+	std::ifstream file(filepath, std::ios::ate | std::ios::binary);
+	if (!file.is_open()) {
+		std::cerr << "ERROR: Shader file does not exist!" << std::endl;
+		return false;
+	}
+	// Since cursor is at the end, use it to find the size of the file, then copy the entire shader into a vector of uint32_t
+	size_t filesize = (size_t)file.tellg(); // tellg() returns the position of the cursor
+	std::vector<uint32_t> buffer(filesize / sizeof(uint32_t));
+	file.seekg(0); // move cursor to beginning
+	file.read((char*)buffer.data(), filesize); // load entire file into the buffer
+	file.close();
+	// Now we have the entire shader in the buffer and can load it to Vulkan
+	VkShaderModuleCreateInfo createinfo;
+	createinfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createinfo.pNext = nullptr;
+	createinfo.codeSize = buffer.size() * sizeof(uint32_t); // codeSize has to be in bytes
+	createinfo.pCode = buffer.data();
+	createinfo.flags=0;
+
+	VkShaderModule shader_module;
+	if (vkCreateShaderModule(device, &createinfo, nullptr, &shader_module) != VK_SUCCESS) {
+		std::cerr << "ERROR: Something went wrong within vkCreateShaderModule()!" << std::endl;
+		return false;
+	}
+	*out_shader_module = shader_module;
+	return true;
 }

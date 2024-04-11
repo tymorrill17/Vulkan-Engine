@@ -124,6 +124,9 @@ public:
 	// Default pipeline and layout
 	VkPipelineLayout mesh_pipeline_layout;
 	VkPipeline mesh_pipeline;
+	// Compute pipelines
+	VkPipelineLayout gradient_pipeline_layout;
+	VkPipeline gradient_pipeline;
 	// Meshes
 	// Depth Image objects
 	AllocatedImage depth_image;
@@ -185,10 +188,11 @@ private:
 	void init_framebuffers();
 	void init_sync();
 	void init_pipelines();
+	void init_graphics_pipelines();
+	void init_compute_pipelines();
 	void init_descriptors();
 
 	// :::::::::::::::::::::::::: Loading Functions ::::::::::::::::::::::::::
-	bool load_shader_module(const char* filepath, VkShaderModule* out_shader_module);
 	void load_meshes();
 	void load_images();
 	void upload_mesh(Mesh& mesh); // Loads a mesh to a CPU buffer then transfers to GPU memory
