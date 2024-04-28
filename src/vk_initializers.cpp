@@ -281,15 +281,32 @@ VkImageSubresourceRange vkinit::image_subresource_range(VkImageAspectFlags aspec
     return subrange;
 }
 
-VkRenderingInfoKHR vkinit::rendering_info(VkExtent2D extent, uint32_t color_attach_count, uint32_t layer_count) {
+VkRenderingInfoKHR vkinit::rendering_info(VkExtent2D extent, uint32_t color_attachment_count, VkRenderingAttachmentInfo* color_attachment, VkRenderingAttachmentInfo* depth_attachment) {
     VkRenderingInfoKHR info{
         .sType=VK_STRUCTURE_TYPE_RENDERING_INFO_KHR,
         .pNext=nullptr,
-        .layerCount=layer_count,
-        .colorAttachmentCount=color_attach_count,
+        .layerCount=1,
+        .colorAttachmentCount=color_attachment_count,
+        .pColorAttachments = color_attachment,
+        .pDepthAttachment = depth_attachment
     };
     info.renderArea.extent=extent;
     info.renderArea.offset.x=0;
     info.renderArea.offset.y=0;
     return info;
+}
+// This could be a color attachment or depth attachment
+VkRenderingAttachmentInfoKHR vkinit::attachment_info(VkImageView view, VkClearValue* clear, VkImageLayout layout) {
+    VkRenderingAttachmentInfoKHR rai{
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
+        .pNext = nullptr,
+        .imageView = view,
+        .imageLayout = layout,
+        .loadOp = clear ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+    };
+    if (clear) {
+        rai.clearValue = *clear;
+    }
+    return rai;
 }

@@ -32,6 +32,20 @@ struct MeshPushConstants {
 	glm::mat4 render_matrix;
 };
 
+struct ComputePushConstants {
+	glm::vec4 data1;
+	glm::vec4 data2;
+	glm::vec4 data3;
+	glm::vec4 data4;
+};
+
+struct ComputeEffect {
+	const char* name;
+	VkPipeline pipeline;
+	VkPipelineLayout pipeline_layout;
+	ComputePushConstants data;
+};
+
 struct Material {
 	VkDescriptorSet texture_set{VK_NULL_HANDLE};
 	VkPipeline pipeline;
@@ -151,6 +165,10 @@ public:
 	UploadContext upload_context;
 	// Texture descriptor set layout
 	VkDescriptorSetLayout single_texture_set_layout;
+	// Immediate Submit control structures
+	UploadContext imm_context;
+	VkDescriptorPool imgui_pool;
+	
 
 	int selectedShader{0}; // 0 -> red triangle, 1 -> colored triangle
 
@@ -191,6 +209,7 @@ private:
 	void init_graphics_pipelines();
 	void init_compute_pipelines();
 	void init_descriptors();
+	void init_imgui();
 
 	// :::::::::::::::::::::::::: Loading Functions ::::::::::::::::::::::::::
 	void load_meshes();
@@ -200,6 +219,7 @@ private:
 	// :::::::::::::::::::::::::: Scene-Related Functions ::::::::::::::::::::::::::
 	void draw_objects(VkCommandBuffer cmd, RenderObject* first, int count);
 	void draw_background(VkCommandBuffer cmd, VkClearValue* clear);
+	void draw_imgui(VkCommandBuffer cmd, VkImageView target_imageview);
 	void init_scene();
 	Material* create_material(VkPipeline pipeline, VkPipelineLayout layout, const std::string& name); // Create materials and add them to the materials unordered_map
 	Material* get_material(const std::string& name); // Returns nullptr if not found
