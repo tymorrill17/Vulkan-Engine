@@ -363,24 +363,27 @@ void VulkanEngine::init_sync() {
 }
 // Initialize rendering pipeline structures
 void VulkanEngine::init_graphics_pipelines() {
-	VkShaderModule triangleFragShader;
-	if (!vkutil::load_shader_module("../shaders/default_lit.frag.spv", device, &triangleFragShader)) {
-		std::cout << "Error building the colored mesh shader module!" << std::endl;
-	} else {
-		std::cout << "Fragment shader successfully loaded!" << std::endl;
-	}
+	VkShaderModule meshFragShader;
+	vkutil::load_shader_module("../shaders/default_lit.frag.spv", device, &meshFragShader);
+	// if (!vkutil::load_shader_module("../shaders/default_lit.frag.spv", device, &meshFragShader)) {
+	// 	std::cout << "Error building the colored mesh shader module!" << std::endl;
+	// } else {
+	// 	std::cout << "Fragment shader successfully loaded!" << std::endl;
+	// }
 	VkShaderModule meshVertShader;
-	if (!vkutil::load_shader_module("../shaders/tri_mesh.vert.spv", device, &meshVertShader)) {
-		std::cout << "Error when building the triangle mesh vertex shader module!" << std::endl;
-	} else {
-		std::cout << "Triangle mesh vertex shader successfully loaded!" << std::endl;
-	}
+	vkutil::load_shader_module("../shaders/tri_mesh.vert.spv", device, &meshVertShader);
+	// if (!vkutil::load_shader_module("../shaders/tri_mesh.vert.spv", device, &meshVertShader)) {
+	// 	std::cout << "Error when building the triangle mesh vertex shader module!" << std::endl;
+	// } else {
+	// 	std::cout << "Triangle mesh vertex shader successfully loaded!" << std::endl;
+	// }
 	VkShaderModule texturedMeshShader;
-	if (!vkutil::load_shader_module("../shaders/texture_lit.frag.spv", device, &texturedMeshShader)) {
-		std::cout << "Error when building the textured fragment shader module!" << std::endl;
-	} else {
-		std::cout << "Textured fragment shader successfully loaded!" << std::endl;
-	}
+	vkutil::load_shader_module("../shaders/texture_lit.frag.spv", device, &texturedMeshShader);
+	// if (!vkutil::load_shader_module("../shaders/texture_lit.frag.spv", device, &texturedMeshShader)) {
+	// 	std::cout << "Error when building the textured fragment shader module!" << std::endl;
+	// } else {
+	// 	std::cout << "Textured fragment shader successfully loaded!" << std::endl;
+	// }
 
 	// ::::::::::::::::::::::::: Building Mesh Triangle Pipeline :::::::::::::::::::::::::
 
@@ -404,39 +407,31 @@ void VulkanEngine::init_graphics_pipelines() {
 
 	PipelineBuilder pipeline_builder;
 
-	// Vertex input controls how to read vertices from vertex buffers
-	pipeline_builder.vertex_input_info = vkinit::vertex_input_state_create_info();
-	// Input assembly is the configuration for drawing triangle lists, strips, or points
-	pipeline_builder.input_assembly = vkinit::input_assembly_state_create_info(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-	// Configure the rasterizer to draw filled triangles
-	pipeline_builder.rasterizer = vkinit::rasterization_state_create_info(VK_POLYGON_MODE_FILL);
-	// Not using multisampling righ now
-	pipeline_builder.multisampling = vkinit::multisampling_state_create_info();
-	// A single blend attachment with no blending writing to RGBA
-	pipeline_builder.color_blend_attachment = vkinit::color_blend_attachment_state();
-	// Depth stencil
-	pipeline_builder.depth_stencil = vkinit::depth_stencil_create_info(true, true, VK_COMPARE_OP_LESS_OR_EQUAL);
 	// Pipeline layout
 	pipeline_builder.pipeline_layout = mesh_pipeline_layout;
+	// Vertex input controls how to read vertices from vertex buffers !!!!!DELETE LATER!!!!
+	pipeline_builder.vertex_input_info = vkinit::vertex_input_state_create_info();
+
+	pipeline_builder.set_shaders(meshVertShader, meshFragShader);
+	pipeline_builder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	pipeline_builder.set_polygon_mode(VK_POLYGON_MODE_FILL);
+	pipeline_builder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+	pipeline_builder.set_multisampling_none();
+	pipeline_builder.disable_blending();
+	pipeline_builder.depth_stencil = vkinit::depth_stencil_create_info(true, true, VK_COMPARE_OP_LESS_OR_EQUAL);
 	
-	// Vertex buffer description
+	pipeline_builder.set_color_attachment_format(draw_image.format);
+	pipeline_builder.set_depth_format(depth_image.format);
+
+	// Vertex buffer description !!!!!DELETE LATER!!!!!
 	VertexInputDescription vertex_description = Vertex::get_vertex_description();
 	pipeline_builder.vertex_input_info.vertexAttributeDescriptionCount = vertex_description.attributes.size();
 	pipeline_builder.vertex_input_info.pVertexAttributeDescriptions = vertex_description.attributes.data();
 	pipeline_builder.vertex_input_info.vertexBindingDescriptionCount = vertex_description.bindings.size();
 	pipeline_builder.vertex_input_info.pVertexBindingDescriptions = vertex_description.bindings.data();
 
-	pipeline_builder.shader_stages.push_back(vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, meshVertShader));
-	pipeline_builder.shader_stages.push_back(vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT, triangleFragShader));
-
-	VkPipelineRenderingCreateInfo rendering_info{.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-	rendering_info.colorAttachmentCount = 1;
-	rendering_info.pColorAttachmentFormats = &draw_image.format;
-	rendering_info.depthAttachmentFormat = depth_image.format;
-	pipeline_builder.rendering_info = rendering_info;
-
 	// Build the mesh pipeline
-	mesh_pipeline = pipeline_builder.build_pipeline(device, this);
+	mesh_pipeline = pipeline_builder.build_pipeline(device);
 	create_material(mesh_pipeline, mesh_pipeline_layout, "default_mesh");
 
 	// ::::::::::::::::::::::::: Building Textured Drawing Pipeline :::::::::::::::::::::::::
@@ -449,16 +444,14 @@ void VulkanEngine::init_graphics_pipelines() {
 	VkPipelineLayout textured_pipeline_layout;
 	VK_CHECK(vkCreatePipelineLayout(device, &textured_pipeline_layout_info, nullptr, &textured_pipeline_layout));
 
-	pipeline_builder.shader_stages.clear();
-	pipeline_builder.shader_stages.push_back(vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, meshVertShader));
-	pipeline_builder.shader_stages.push_back(vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT, texturedMeshShader));
+	pipeline_builder.set_shaders(meshVertShader, texturedMeshShader);
 	pipeline_builder.pipeline_layout = textured_pipeline_layout;
 
-	VkPipeline tex_pipeline = pipeline_builder.build_pipeline(device, this);
+	VkPipeline tex_pipeline = pipeline_builder.build_pipeline(device);
 	create_material(tex_pipeline, textured_pipeline_layout, "textured_mesh");
 
 	// Destroy all shader modules outside of the deletion queue
-	vkDestroyShaderModule(device, triangleFragShader, nullptr);
+	vkDestroyShaderModule(device, meshFragShader, nullptr);
 	vkDestroyShaderModule(device, meshVertShader, nullptr);
 	vkDestroyShaderModule(device, texturedMeshShader, nullptr);
 	main_deletion_queue.push_function([=, this](){
@@ -1094,25 +1087,25 @@ void VulkanEngine::draw() {
 
 	// Now fill the VkRenderingInfoKHR struct with the attachment info.
 	// The VkRenderingInfoKHR struct contains information that used to be located in the renderpass and framebuffers.
-	// VkRenderingInfoKHR render_info = vkinit::rendering_info(windowExtent, 1, &color_attachment_info, &depth_attachment_info);
-	// render_info.pColorAttachments = &color_attachment_info;
-	// render_info.pDepthAttachment = &depth_attachment_info;
+	VkRenderingInfoKHR render_info = vkinit::rendering_info(windowExtent, 1, &color_attachment_info, &depth_attachment_info);
+	render_info.pColorAttachments = &color_attachment_info;
+	render_info.pDepthAttachment = &depth_attachment_info;
 
-	// // The renderpass used to automatically transition image layouts, but with dynamic rendering we need to do it manually.
+	// The renderpass used to automatically transition image layouts, but with dynamic rendering we need to do it manually.
 	// vkutil::transition_image(cmd, depth_image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-	// vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	
-	// vkCmdBeginRendering(cmd, &render_info); // Analogous to BeginRenderpass
+	vkCmdBeginRendering(cmd, &render_info); // Analogous to BeginRenderpass
 
-	// // RENDER HERE
-	// // draw_objects(cmd, renderables.data(), renderables.size());
+	// RENDER HERE
+	draw_objects(cmd, renderables.data(), renderables.size());
 
-	// // End render pass
-	// vkCmdEndRendering(cmd); // EndRenderpass
+	// End render pass
+	vkCmdEndRendering(cmd); // EndRenderpass
 
-	// // Must transition image to a present-ready format to present
-	// vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-	vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	// Must transition image to a present-ready format to present
+	vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	// vkutil::transition_image(cmd, draw_image.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 	vkutil::transition_image(cmd, swapchain_images[swapchain_image_index], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	vkutil::copy_image_to_image(cmd, draw_image.image, draw_extent, swapchain_images[swapchain_image_index], swapchain_extent);

@@ -1,10 +1,11 @@
 #include "vk_engine.h"
 #include "vk_pipeline.h"
+#include "vk_initializers.h"
 
 #include <fstream>
 
-VkPipeline PipelineBuilder::build_pipeline(VkDevice device, VulkanEngine* engine) { //VkRenderPass pass) {
-    // Make viewport state from stored viewport and scissor.
+VkPipeline PipelineBuilder::build_pipeline(VkDevice device) { //VkRenderPass pass) {
+    // Make viewport state from stored viewport and scissor. Could add support for multiple viewports in the future
     VkPipelineViewportStateCreateInfo viewport_state={};
     viewport_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     viewport_state.pNext = nullptr;
@@ -20,10 +21,13 @@ VkPipeline PipelineBuilder::build_pipeline(VkDevice device, VulkanEngine* engine
     color_blending.attachmentCount = 1;
     color_blending.pAttachments = &color_blend_attachment;
 
+    // Inititalize to zero since it won't be used
+    // TODO: CHANGE THIS BACK LATER WHEN WE CHANGE THE VERTEX BUFFER SYSTEM
+    // VkPipelineVertexInputStateCreateInfo vertex_input_info = {.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
+
     // Build the actual pipeline.
     // All of the initializers of pipeline objects come into play
-    VkGraphicsPipelineCreateInfo pipeline_info={};
-    pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    VkGraphicsPipelineCreateInfo pipeline_info={.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
     pipeline_info.pNext = &rendering_info;
     pipeline_info.stageCount = shader_stages.size();
     pipeline_info.pStages = shader_stages.data(); // Shader stages contain shader programs
@@ -55,14 +59,24 @@ VkPipeline PipelineBuilder::build_pipeline(VkDevice device, VulkanEngine* engine
     VkPipeline pipeline;
     return pipeline;
 }
-
+// Clears all values from the PipelineBuilder to be able to safely reuse the object.
+void PipelineBuilder::clear() {
+    input_assembly = {.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
+    rasterizer = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO};
+    color_blend_attachment = {};
+    multisampling = {.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
+    pipeline_layout = {};
+    depth_stencil = {.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
+    rendering_info = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+    shader_stages.clear();
+}
 // Loads a shader module from a SPIR-V file. Returns false if there are errors.
 bool vkutil::load_shader_module(const char* filepath, VkDevice device, VkShaderModule* out_shader_module) {
 	// std::ios::ate -> puts stream curser at end
 	// std::ios::binary -> opens file in binary mode
 	std::ifstream file(filepath, std::ios::ate | std::ios::binary);
 	if (!file.is_open()) {
-		std::cerr << "ERROR: Shader file does not exist!" << std::endl;
+		std::cerr << "ERROR: Shader file does not exist: " << filepath << std::endl;
 		return false;
 	}
 	// Since cursor is at the end, use it to find the size of the file, then copy the entire shader into a vector of uint32_t
@@ -81,9 +95,70 @@ bool vkutil::load_shader_module(const char* filepath, VkDevice device, VkShaderM
 
 	VkShaderModule shader_module;
 	if (vkCreateShaderModule(device, &createinfo, nullptr, &shader_module) != VK_SUCCESS) {
-		std::cerr << "ERROR: Something went wrong within vkCreateShaderModule()!" << std::endl;
+		std::cerr << "ERROR: vkCreateShaderModule() failed while creating " << filepath << std::endl;
 		return false;
 	}
 	*out_shader_module = shader_module;
+    std::cout << "Shader successfully loaded: " << filepath << std::endl;
 	return true;
+}
+void PipelineBuilder::set_shaders(VkShaderModule vertex_shader, VkShaderModule fragment_shader) {
+    shader_stages.clear();
+    shader_stages.push_back(vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, vertex_shader));
+    shader_stages.push_back(vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT, fragment_shader));
+}
+void PipelineBuilder::set_input_topology(VkPrimitiveTopology topology) {
+    input_assembly.topology = topology;
+    input_assembly.primitiveRestartEnable = VK_FALSE; // Not using for now
+}
+// These next few pertain to the rasterizer since there are several features we might want to change
+void PipelineBuilder::set_polygon_mode(VkPolygonMode mode) {
+    rasterizer.polygonMode = mode;
+    rasterizer.lineWidth = 1.0f; // Setting this to a default of 1.0
+}
+void PipelineBuilder::set_cull_mode(VkCullModeFlags cull_mode, VkFrontFace front_face) {
+    rasterizer.cullMode = cull_mode;
+    rasterizer.frontFace = front_face;
+}
+void PipelineBuilder::set_multisampling_none() {
+    multisampling.sampleShadingEnable = VK_FALSE;
+    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT; // no multisampling: 1 sample per pixel
+    multisampling.minSampleShading = 1.0f;
+    multisampling.pSampleMask = nullptr;
+    multisampling.alphaToCoverageEnable = VK_FALSE;
+    multisampling.alphaToOneEnable = VK_FALSE;
+}
+void PipelineBuilder::disable_blending() {
+    color_blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    color_blend_attachment.blendEnable = VK_FALSE;
+}
+void PipelineBuilder::set_color_attachment_format(VkFormat format) {
+    color_attachment_format = format;
+    rendering_info.colorAttachmentCount = 1;
+    rendering_info.pColorAttachmentFormats = &color_attachment_format;
+}
+void PipelineBuilder::set_depth_format(VkFormat format) {
+    rendering_info.depthAttachmentFormat = format;
+}
+void PipelineBuilder::disable_depth_test() {
+    depth_stencil.depthTestEnable = VK_FALSE;
+    depth_stencil.depthWriteEnable = VK_FALSE;
+    depth_stencil.depthCompareOp = VK_COMPARE_OP_NEVER;
+    depth_stencil.depthBoundsTestEnable = VK_FALSE;
+    depth_stencil.stencilTestEnable = VK_FALSE;
+    depth_stencil.front = {};
+    depth_stencil.back = {};
+    depth_stencil.minDepthBounds = 0.0f;
+    depth_stencil.maxDepthBounds = 1.0f;
+}
+void PipelineBuilder::enable_depth_test(VkCompareOp compareOp) {
+    depth_stencil.depthTestEnable = VK_TRUE;
+    depth_stencil.depthWriteEnable = VK_TRUE;
+    depth_stencil.depthCompareOp = compareOp;
+    depth_stencil.depthBoundsTestEnable = VK_FALSE;
+    depth_stencil.stencilTestEnable = VK_FALSE;
+    depth_stencil.front = {};
+    depth_stencil.back = {};
+    depth_stencil.minDepthBounds = 0.0f;
+    depth_stencil.maxDepthBounds = 1.0f;
 }
