@@ -42,7 +42,7 @@ struct ComputePushConstants {
 struct ComputeEffect {
 	const char* name;
 	VkPipeline pipeline;
-	VkPipelineLayout pipeline_layout;
+	VkPipelineLayout layout;
 	ComputePushConstants data;
 };
 
@@ -168,6 +168,8 @@ public:
 	// Immediate Submit control structures
 	UploadContext imm_context;
 	VkDescriptorPool imgui_pool;
+	std::vector<ComputeEffect> background_effects;
+	int current_background_effect{0}; 
 	
 
 	int selectedShader{0}; // 0 -> red triangle, 1 -> colored triangle
